@@ -35,6 +35,8 @@ run("compiler-bad.tsx", { expectFail: true });
 run("unused-args-ok.ts");
 run("test-import-bad.ts", { expectFail: true });
 run("playwright/hooks-ok.ts");
+run("floating-promise-bad.ts", { expectFail: true });
+run("void-expression-bad.ts", { expectFail: true });
 
 if (process.exitCode) {
   console.error("smoke failed");

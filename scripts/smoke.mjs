@@ -32,6 +32,9 @@ function run(file, { expectFail = false } = {}) {
 run("hooks-good.tsx");
 run("hooks-bad.tsx", { expectFail: true });
 run("compiler-bad.tsx", { expectFail: true });
+run("unused-args-ok.ts");
+run("test-import-bad.ts", { expectFail: true });
+run("playwright/hooks-ok.ts");
 
 if (process.exitCode) {
   console.error("smoke failed");

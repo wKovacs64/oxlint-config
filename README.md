@@ -2,8 +2,8 @@
 
 Personal [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) config.
 
-Native **React hooks** + experimental **`react/react-compiler`**, Oxlint defaults, and a few
-high-signal rule tweaks.
+Native **React hooks** + experimental **`react/react-compiler`**, **type-aware** linting via
+`oxlint-tsgolint`, Oxlint defaults, and a few high-signal rule tweaks.
 
 [![npm Version](https://img.shields.io/npm/v/@wkovacs64/oxlint-config.svg?style=for-the-badge)](https://www.npmjs.com/package/@wkovacs64/oxlint-config)
 [![Build Status](https://img.shields.io/badge/CI-GitHub%20Actions-success?logo=github&style=for-the-badge)](https://github.com/wKovacs64/oxlint-config/actions?query=workflow%3Aci)
@@ -11,7 +11,7 @@ high-signal rule tweaks.
 ### Install
 
 ```sh
-pnpm add --save-dev @wkovacs64/oxlint-config oxlint
+pnpm add --save-dev @wkovacs64/oxlint-config oxlint oxlint-tsgolint
 ```
 
 Requires Node `^20.19.0 || >=22.12.0` (Oxlint JS/TS config needs a TS-capable Node runtime).
@@ -44,9 +44,17 @@ Add scripts:
 VS Code / forks: install [Oxc](https://marketplace.visualstudio.com/items?itemName=oxc.oxc-vscode)
 (`oxc.oxc-vscode`).
 
-### Type-aware linting (optional)
+### Type-aware linting
 
-Not enabled here (`options.typeAware` is root-config-only). In the app config:
+**On by default** (`options.typeAware: true`). Requires the `oxlint-tsgolint` peer — without it
+Oxlint exits with `Failed to find tsgolint executable`.
+
+Also enabled:
+
+- `typescript/no-floating-promises` (`ignoreIIFE: true`)
+- `typescript/no-confusing-void-expression` (`ignoreArrowShorthand: true`)
+
+Type-aware adds analysis cost on large projects. Opt out in the consumer root config:
 
 ```ts
 import config from "@wkovacs64/oxlint-config";
@@ -55,18 +63,12 @@ import { defineConfig } from "oxlint";
 export default defineConfig({
   extends: [config],
   options: {
-    typeAware: true,
+    typeAware: false,
   },
 });
 ```
 
-Also install [`oxlint-tsgolint`](https://www.npmjs.com/package/oxlint-tsgolint).
-
-When type-aware is on, consider enabling (not set here):
-
-- `typescript/no-floating-promises` — e.g. `["error", { ignoreIIFE: true }]`
-- `typescript/no-confusing-void-expression` — e.g. `["error", { ignoreArrowShorthand: true }]`
-- `typescript/restrict-template-expressions` — Oxlint defaults already allow boolean/nullish
+Type-aware rules stay listed when disabled; Oxlint skips them instead of failing the run.
 
 ### Customize
 
@@ -92,5 +94,4 @@ export default defineConfig({
   when the rule is not customized). Not tuning `ignoreRestSiblings` / `varsIgnorePattern`.
 - Import **ordering** is not configured (no native `import/order`); use a formatter if you care.
 - Not included (no solid native path, or out of scope for v1): Testing Library, jest-dom, Playwright
-  recommended sets, Astro, type-aware-on-by-default, TS naming-convention (e.g. ban `I`-prefix
-  interfaces).
+  recommended sets, Astro, TS naming-convention (e.g. ban `I`-prefix interfaces).

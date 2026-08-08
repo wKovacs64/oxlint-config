@@ -7,6 +7,10 @@ const playwrightGlobs = ["**/playwright/**"];
 export default defineConfig({
   // Setting `plugins` replaces defaults — include the full desired set.
   plugins: ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y", "import", "vitest"],
+  options: {
+    // Requires peer `oxlint-tsgolint`. Consumers may set `typeAware: false` to opt out.
+    typeAware: true,
+  },
   categories: {
     correctness: "error",
     suspicious: "warn",
@@ -65,6 +69,8 @@ export default defineConfig({
       },
     ],
     "typescript/no-import-type-side-effects": "error",
+    "typescript/no-floating-promises": ["error", { ignoreIIFE: true }],
+    "typescript/no-confusing-void-expression": ["error", { ignoreArrowShorthand: true }],
     "typescript/no-explicit-any": "off",
     "typescript/no-non-null-assertion": "off",
     "typescript/ban-ts-comment": "off",

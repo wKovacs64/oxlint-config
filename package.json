@@ -1,0 +1,74 @@
+{
+  "name": "@wkovacs64/oxlint-config",
+  "version": "0.1.0",
+  "private": false,
+  "description": "@wKovacs64 Oxlint config",
+  "keywords": [
+    "lint",
+    "linter",
+    "oxc",
+    "oxlint",
+    "oxlint-config",
+    "react",
+    "react-compiler",
+    "react-hooks"
+  ],
+  "homepage": "https://github.com/wKovacs64/oxlint-config#readme",
+  "bugs": {
+    "url": "https://github.com/wKovacs64/oxlint-config/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Justin Hall",
+    "email": "justin.r.hall@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wKovacs64/oxlint-config.git"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "changeset": "changeset",
+    "changeset:version": "changeset version && pnpm install --lockfile-only",
+    "changeset:publish": "changeset publish",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint",
+    "test": "node ./scripts/smoke.mjs",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "0.7.0",
+    "@changesets/cli": "2.31.1",
+    "@types/react": "19.2.18",
+    "@wkovacs64/oxfmt-config": "1.0.0",
+    "oxfmt": "0.62.0",
+    "oxlint": "1.77.0",
+    "react": "19.2.8",
+    "typescript": "5.9.3"
+  },
+  "peerDependencies": {
+    "oxlint": ">=1.70.0 <2"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "packageManager": "pnpm@11.20.0"
+}

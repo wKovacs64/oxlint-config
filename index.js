@@ -1,5 +1,9 @@
 import { defineConfig } from "oxlint";
 
+const testGlobs = ["**/tests/**", "**/#tests/**", "**/__tests__/**", "**/*.{test,spec}.*"];
+
+const playwrightGlobs = ["**/playwright/**"];
+
 export default defineConfig({
   // Setting `plugins` replaces defaults — include the full desired set.
   plugins: ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y", "import", "vitest"],
@@ -34,7 +38,6 @@ export default defineConfig({
     "react/exhaustive-deps": "error",
     "react/react-compiler": "error",
 
-    // Selective ports from @wkovacs64/eslint-config
     "react/function-component-definition": [
       "error",
       {
@@ -53,12 +56,65 @@ export default defineConfig({
 
     "import/no-duplicates": ["warn", { preferInline: true }],
 
-    // High-signal TS tweaks only; prefer Oxlint defaults otherwise
+    // High-signal TS tweaks; prefer Oxlint defaults otherwise
+    "typescript/consistent-type-assertions": [
+      "error",
+      {
+        assertionStyle: "as",
+        objectLiteralTypeAssertions: "allow-as-parameter",
+      },
+    ],
+    "typescript/no-import-type-side-effects": "error",
     "typescript/no-explicit-any": "off",
     "typescript/no-non-null-assertion": "off",
     "typescript/ban-ts-comment": "off",
     "typescript/consistent-type-definitions": "off",
-
-    "vitest/no-focused-tests": "warn",
   },
+  overrides: [
+    {
+      // Source files must not import test files
+      files: ["**/*.{js,jsx,cjs,mjs,ts,tsx,cts,mts}"],
+      excludeFiles: [...testGlobs, ...playwrightGlobs],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            patterns: [
+              {
+                group: [
+                  "**/tests/**",
+                  "**/#tests/**",
+                  "**/__tests__/**",
+                  // bare + extensioned (e.g. ./foo.test, ./foo.test.ts)
+                  "**/*.test",
+                  "**/*.test.*",
+                  "**/*.spec",
+                  "**/*.spec.*",
+                ],
+                message: "Do not import test files in source files",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: testGlobs,
+      env: {
+        vitest: true,
+      },
+      rules: {
+        "vitest/no-focused-tests": "warn",
+      },
+    },
+    {
+      // Playwright specs aren't React components/hooks consumers
+      files: playwrightGlobs,
+      rules: {
+        "react/rules-of-hooks": "off",
+        "react/exhaustive-deps": "off",
+        "react/react-compiler": "off",
+      },
+    },
+  ],
 });

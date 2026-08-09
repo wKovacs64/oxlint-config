@@ -1,10 +1,11 @@
 import { defineConfig } from "oxlint";
 
-const testGlobs = ["**/tests/**", "**/#tests/**", "**/__tests__/**", "**/*.{test,spec}.*"];
-
+const vitestGlobs = ["**/__tests__/**/*", "**/*.test.*"];
+const testGlobs = ["**/tests/**", "**/#tests/**", ...vitestGlobs];
 const playwrightGlobs = ["**/playwright/**"];
+const playwrightTestGlobs = ["**/playwright/**/*.spec.*"];
 
-export default defineConfig({
+const baseConfig = defineConfig({
   // Setting `plugins` replaces defaults — include the full desired set.
   plugins: ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y", "import", "vitest"],
   options: {
@@ -57,8 +58,10 @@ export default defineConfig({
         assert: "either",
       },
     ],
+    "jsx-a11y/prefer-tag-over-role": "off",
 
     "import/no-duplicates": ["warn", { preferInline: true }],
+    "import/no-unassigned-import": "off",
 
     // High-signal TS tweaks; prefer Oxlint defaults otherwise
     "typescript/consistent-type-assertions": [
@@ -73,6 +76,7 @@ export default defineConfig({
     "typescript/no-confusing-void-expression": ["error", { ignoreArrowShorthand: true }],
     "typescript/no-explicit-any": "off",
     "typescript/no-non-null-assertion": "off",
+    "typescript/unbound-method": "off",
     "typescript/ban-ts-comment": "off",
     "typescript/consistent-type-definitions": "off",
   },
@@ -106,6 +110,7 @@ export default defineConfig({
     },
     {
       files: testGlobs,
+      excludeFiles: playwrightTestGlobs,
       env: {
         vitest: true,
       },
@@ -124,3 +129,20 @@ export default defineConfig({
     },
   ],
 });
+
+export function createConfig(config = {}) {
+  return defineConfig({
+    ...baseConfig,
+    ...config,
+    categories: { ...baseConfig.categories, ...config.categories },
+    env: { ...baseConfig.env, ...config.env },
+    globals: { ...baseConfig.globals, ...config.globals },
+    ignorePatterns: [...baseConfig.ignorePatterns, ...(config.ignorePatterns ?? [])],
+    jsPlugins: [...(baseConfig.jsPlugins ?? []), ...(config.jsPlugins ?? [])],
+    options: { ...baseConfig.options, ...config.options },
+    overrides: [...baseConfig.overrides, ...(config.overrides ?? [])],
+    plugins: [...new Set([...baseConfig.plugins, ...(config.plugins ?? [])])],
+    rules: { ...baseConfig.rules, ...config.rules },
+    settings: { ...baseConfig.settings, ...config.settings },
+  });
+}

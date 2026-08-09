@@ -1,5 +1,5 @@
 import type { OxlintConfig } from "oxlint";
 
-declare const config: OxlintConfig;
+export type ConfigOptions = Omit<OxlintConfig, "extends">;
 
-export default config;
+export declare function createConfig(config?: ConfigOptions): OxlintConfig;

@@ -21,13 +21,13 @@ Requires Node `^20.19.0 || >=22.12.0` (Oxlint JS/TS config needs a TS-capable No
 Create `oxlint.config.ts` in the project root:
 
 ```ts
-import config from "@wkovacs64/oxlint-config";
-import { defineConfig } from "oxlint";
+import { createConfig } from "@wkovacs64/oxlint-config";
 
-export default defineConfig({
-  extends: [config],
-});
+export default createConfig();
 ```
+
+Use `createConfig` instead of Oxlint's `extends` so root-only settings such as environments and
+ignore patterns are applied correctly.
 
 Add scripts:
 
@@ -52,11 +52,9 @@ Oxlint exits with `Failed to find tsgolint executable`.
 Type-aware adds analysis cost on large projects. Opt out in the consumer root config:
 
 ```ts
-import config from "@wkovacs64/oxlint-config";
-import { defineConfig } from "oxlint";
+import { createConfig } from "@wkovacs64/oxlint-config";
 
-export default defineConfig({
-  extends: [config],
+export default createConfig({
   options: {
     typeAware: false,
   },
@@ -65,14 +63,26 @@ export default defineConfig({
 
 Type-aware rules stay listed when disabled; Oxlint skips them instead of failing the run.
 
+Type-aware results reflect the project state available when Oxlint runs. If a framework generates
+TypeScript declarations or route types, run its type-generation command first. For example, a React
+Router project might use:
+
+```json
+{
+  "scripts": {
+    "typegen": "react-router typegen",
+    "lint": "pnpm typegen && oxlint",
+    "typecheck": "pnpm typegen && tsc"
+  }
+}
+```
+
 ### Customize
 
 ```ts
-import config from "@wkovacs64/oxlint-config";
-import { defineConfig } from "oxlint";
+import { createConfig } from "@wkovacs64/oxlint-config";
 
-export default defineConfig({
-  extends: [config],
+export default createConfig({
   ignorePatterns: ["my-generated/**"],
   rules: {
     "react/react-compiler": "warn",
@@ -80,11 +90,14 @@ export default defineConfig({
 });
 ```
 
+Consumer ignore patterns, plugins, and overrides are appended to the shared configuration. Object
+settings and rules are merged with consumer values taking precedence.
+
 ### Notes
 
 - Prefer Oxlint native plugins/defaults over exhaustive rule dumps.
 - `react/react-compiler` is experimental upstream; severity may be overridden per project.
-- Setting `plugins` in a consumer config **replaces** the plugin set — include everything you want.
+- `createConfig` combines consumer plugins with the shared plugin set.
 - `no-unused-vars` left on Oxlint defaults (`args: after-used`, built-in `argsIgnorePattern: ^_`
   when the rule is not customized). Not tuning `ignoreRestSiblings` / `varsIgnorePattern`.
 - Import **ordering** is not configured (no native `import/order`); use a formatter if you care.

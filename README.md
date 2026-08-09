@@ -2,8 +2,8 @@
 
 Personal [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) config.
 
-Native **React hooks** + experimental **`react/react-compiler`**, **type-aware** linting via
-`oxlint-tsgolint`, Oxlint defaults, and a few high-signal rule tweaks.
+**Type-aware** linting via `oxlint-tsgolint`, Oxlint defaults, high-signal rule tweaks, and
+**optional** React / Vitest / Astro layers auto-detected from the package tree (overridable).
 
 [![npm Version](https://img.shields.io/npm/v/@wkovacs64/oxlint-config.svg?style=for-the-badge)](https://www.npmjs.com/package/@wkovacs64/oxlint-config)
 [![Build Status](https://img.shields.io/badge/CI-GitHub%20Actions-success?logo=github&style=for-the-badge)](https://github.com/wKovacs64/oxlint-config/actions?query=workflow%3Aci)
@@ -37,6 +37,32 @@ Add scripts:
     "lint": "oxlint"
   }
 }
+```
+
+### Feature detection
+
+On load, the config resolves these packages from the consumer install (same idea as the ESLint
+config) and enables matching layers:
+
+| Package  | Enables                                                                  |
+| -------- | ------------------------------------------------------------------------ |
+| `react`  | `react` + `jsx-a11y` plugins/rules; Playwright path hooks exemptions     |
+| `vitest` | `vitest` plugin, `env.vitest`, `vitest/no-focused-tests` on test globs   |
+| `astro`  | `env.astro` + `no-undef` on `**/*.astro` (frontmatter + `<script>` only) |
+
+Force on/off without relying on resolution (monorepos, tests):
+
+```ts
+import { createConfig } from "@wkovacs64/oxlint-config";
+
+export default createConfig(
+  {},
+  {
+    react: false,
+    vitest: true,
+    astro: true,
+  },
+);
 ```
 
 ### IDE
@@ -101,5 +127,7 @@ settings and rules are merged with consumer values taking precedence.
 - `no-unused-vars` left on Oxlint defaults (`args: after-used`, built-in `argsIgnorePattern: ^_`
   when the rule is not customized). Not tuning `ignoreRestSiblings` / `varsIgnorePattern`.
 - Import **ordering** is not configured (no native `import/order`); use a formatter if you care.
+- **Astro:** Oxlint lints frontmatter + `<script>` only — no template/`client:*` rules (see
+  [compatibility](https://oxc.rs/compatibility.html)).
 - Not included (no solid native path, or out of scope for v1): Testing Library, jest-dom, Playwright
-  recommended sets, Astro, TS naming-convention (e.g. ban `I`-prefix interfaces).
+  recommended sets, TS naming-convention (e.g. ban `I`-prefix interfaces).

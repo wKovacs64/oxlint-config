@@ -44,11 +44,11 @@ Add scripts:
 On load, the config resolves these packages from the consumer install (same idea as the ESLint
 config) and enables matching layers:
 
-| Package  | Enables                                                                  |
-| -------- | ------------------------------------------------------------------------ |
-| `react`  | `react` + `jsx-a11y` plugins/rules; Playwright path hooks exemptions     |
-| `vitest` | `vitest` plugin, `env.vitest`, `vitest/no-focused-tests` on test globs   |
-| `astro`  | `env.astro` + `no-undef` on `**/*.astro` (frontmatter + `<script>` only) |
+| Package  | Enables                                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `react`  | `react` + `jsx-a11y` plugins/rules; Playwright path hooks exemptions                                                      |
+| `vitest` | plugin + `env.vitest` / strict rules on test globs (`no-focused-tests` warn); all `vitest/*` off under `**/playwright/**` |
+| `astro`  | `env.astro` + `no-undef` on `**/*.astro` (frontmatter + `<script>` only)                                                  |
 
 Force on/off without relying on resolution (monorepos, tests):
 

@@ -58,7 +58,37 @@ assert.ok(
   ),
 );
 assert.ok(allOn.overrides.some((o) => o.files?.includes?.("**/playwright/**")));
-console.log("ok features all-on enables react/vitest/astro");
+
+const vitestOverride = allOn.overrides.find((o) => o.env?.vitest);
+assert.ok(vitestOverride);
+assert.deepEqual(vitestOverride.excludeFiles, ["**/playwright/**/*.spec.*"]);
+assert.equal(vitestOverride.rules["vitest/no-focused-tests"], "warn");
+
+const playwrightVitestOff = allOn.overrides.find(
+  (o) =>
+    Array.isArray(o.files) &&
+    o.files.includes("**/playwright/**") &&
+    o.rules &&
+    Object.keys(o.rules).some((k) => k.startsWith("vitest/")),
+);
+assert.ok(playwrightVitestOff, "playwright override must disable vitest/* rules");
+const vitestOffEntries = Object.entries(playwrightVitestOff.rules).filter(([k]) =>
+  k.startsWith("vitest/"),
+);
+assert.ok(vitestOffEntries.length > 0);
+assert.ok(
+  vitestOffEntries.every(([, severity]) => severity === "off"),
+  "every playwright vitest/* rule must be disabled",
+);
+assert.ok(
+  vitestOffEntries.some(([k]) => k === "vitest/expect-expect"),
+  "category-enabled vitest/expect-expect must be disabled on playwright paths",
+);
+assert.ok(
+  vitestOffEntries.some(([k]) => k === "vitest/no-focused-tests"),
+  "category-enabled vitest/no-focused-tests must be disabled on playwright paths",
+);
+console.log("ok features all-on enables react/vitest/astro and isolates playwright");
 
 // Auto-detect matches package tree resolution from this module
 const detected = createConfig();
@@ -95,6 +125,55 @@ function run(file, { expectFail = false, configPath = config } = {}) {
   console.log(`ok ${file} (${label})`);
 }
 
+/**
+ * @param {string} file
+ * @param {{
+ *   configPath?: string,
+ *   forbidVitest?: boolean,
+ *   include?: Array<{ code: string, severity: string }>,
+ * }} [opts]
+ */
+function runJson(file, { configPath = config, forbidVitest = false, include = [] } = {}) {
+  const target = path.join(root, "fixtures", file);
+  const result = spawnSync(oxlintBin, ["-c", configPath, "-f", "json", target], {
+    encoding: "utf8",
+    cwd: root,
+  });
+  /** @type {{ diagnostics?: Array<{ code: string, severity: string }> }} */
+  let payload;
+  try {
+    payload = JSON.parse(result.stdout);
+  } catch {
+    console.error(`FAIL ${file} (invalid json output)`);
+    console.error(result.stdout);
+    console.error(result.stderr);
+    process.exitCode = 1;
+    return;
+  }
+  const diagnostics = payload.diagnostics ?? [];
+  const vitestDiagnostics = diagnostics.filter((d) => d.code.startsWith("vitest("));
+
+  if (forbidVitest && vitestDiagnostics.length > 0) {
+    console.error(`FAIL ${file} (expected zero vitest/* diagnostics)`);
+    console.error(JSON.stringify(vitestDiagnostics, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+
+  for (const wanted of include) {
+    const hit = diagnostics.some((d) => d.code === wanted.code && d.severity === wanted.severity);
+    if (!hit) {
+      console.error(
+        `FAIL ${file} (missing ${wanted.severity} ${wanted.code}); got ${JSON.stringify(diagnostics)}`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  console.log(`ok ${file} (json diagnostics)`);
+}
+
 run("hooks-good.tsx");
 run("hooks-bad.tsx", { expectFail: true });
 run("compiler-bad.tsx", { expectFail: true });
@@ -102,7 +181,21 @@ run("unused-args-ok.ts");
 run("test-import-bad.ts", { expectFail: true });
 run("playwright/hooks-ok.ts");
 run("playwright/focused.spec.ts");
+run("playwright/test-base.ts");
+runJson("playwright/focused.spec.ts", { forbidVitest: true });
+runJson("playwright/direct.spec.ts", { forbidVitest: true });
+runJson("playwright/custom-fixture.spec.ts", { forbidVitest: true });
+runJson("playwright/leak-probe.spec.ts", { forbidVitest: true });
 run("vitest-focused-bad.test.ts", { expectFail: true });
+runJson("vitest-focused-bad.test.ts", {
+  include: [{ code: "vitest(no-focused-tests)", severity: "warning" }],
+});
+runJson("vitest-no-expect-bad.test.ts", {
+  include: [{ code: "vitest(expect-expect)", severity: "error" }],
+});
+runJson("vitest-untyped-mock-bad.test.ts", {
+  include: [{ code: "vitest(require-mock-type-parameters)", severity: "error" }],
+});
 run("role-img-ok.tsx");
 run("role-required-bad.tsx", { expectFail: true });
 run("side-effect-import-ok.ts");

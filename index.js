@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "oxlint";
 
 const vitestGlobs = ["**/__tests__/**/*", "**/*.test.*"];
@@ -15,6 +18,34 @@ function has(pkgName) {
   } catch {
     return false;
   }
+}
+
+/** @type {Record<string, "off"> | undefined} */
+let cachedVitestRuleOffs;
+
+/**
+ * Every native `vitest/*` rule key from the installed oxlint schema.
+ * Category-enabled Vitest rules activate globally with the plugin; Playwright
+ * paths need an explicit off list (override `excludeFiles` only drops env/severity).
+ * @returns {Record<string, "off">}
+ */
+function vitestRuleOffs() {
+  if (cachedVitestRuleOffs) {
+    return cachedVitestRuleOffs;
+  }
+  const oxlintPkg = fileURLToPath(import.meta.resolve("oxlint/package.json"));
+  const schema = readFileSync(join(dirname(oxlintPkg), "configuration_schema.json"), "utf8");
+  const keys = new Set([...schema.matchAll(/"(vitest\/[^"]+)"/g)].map((match) => match[1]));
+  if (keys.size === 0) {
+    throw new Error("oxlint configuration_schema.json: no vitest/* rules found");
+  }
+  /** @type {Record<string, "off">} */
+  const offs = {};
+  for (const key of keys) {
+    offs[key] = "off";
+  }
+  cachedVitestRuleOffs = offs;
+  return offs;
 }
 
 /**
@@ -134,6 +165,12 @@ function buildBaseConfig(featureFlags) {
       rules: {
         "vitest/no-focused-tests": "warn",
       },
+    });
+    // Categories enable vitest/* globally once the plugin is on; turn them all
+    // off under Playwright paths (excludeFiles on the Vitest override is not enough).
+    overrides.push({
+      files: playwrightGlobs,
+      rules: vitestRuleOffs(),
     });
   }
 

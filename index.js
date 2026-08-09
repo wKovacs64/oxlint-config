@@ -5,61 +5,50 @@ const testGlobs = ["**/tests/**", "**/#tests/**", ...vitestGlobs];
 const playwrightGlobs = ["**/playwright/**"];
 const playwrightTestGlobs = ["**/playwright/**/*.spec.*"];
 
-const baseConfig = defineConfig({
-  // Setting `plugins` replaces defaults — include the full desired set.
-  plugins: ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y", "import", "vitest"],
-  options: {
-    // Requires peer `oxlint-tsgolint`. Consumers may set `typeAware: false` to opt out.
-    typeAware: true,
-  },
-  categories: {
-    correctness: "error",
-    suspicious: "warn",
-  },
-  env: {
-    browser: true,
-    node: true,
-  },
-  ignorePatterns: [
-    "**/.astro/**",
-    "**/.cache/**",
-    "**/.react-router/**",
-    "**/.next/**",
-    "**/.vercel/**",
-    "**/node_modules/**",
-    "**/build/**",
-    "**/public/build/**",
-    "**/playwright-report/**",
-    "**/playwright-results/**",
-    "**/playwright/report/**",
-    "**/playwright/results/**",
-    "**/server-build/**",
-    "**/dist/**",
-    "**/coverage/**",
-  ],
-  rules: {
-    // React hooks + compiler (primary requirement)
-    "react/rules-of-hooks": "error",
-    "react/exhaustive-deps": "error",
-    "react/react-compiler": "error",
+/**
+ * @param {string} pkgName
+ */
+function has(pkgName) {
+  try {
+    import.meta.resolve(pkgName, import.meta.url);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-    "react/function-component-definition": [
-      "error",
-      {
-        namedComponents: "function-declaration",
-        unnamedComponents: "arrow-function",
-      },
-    ],
-    "react/react-in-jsx-scope": "off",
+/**
+ * @typedef {{ react?: boolean, vitest?: boolean, astro?: boolean }} Features
+ */
 
-    "jsx-a11y/label-has-associated-control": [
-      "error",
-      {
-        assert: "either",
-      },
-    ],
-    "jsx-a11y/prefer-tag-over-role": "off",
+/**
+ * @param {Features} [features]
+ */
+function resolveFeatures(features = {}) {
+  return {
+    react: features.react ?? has("react"),
+    vitest: features.vitest ?? has("vitest"),
+    astro: features.astro ?? has("astro"),
+  };
+}
 
+/**
+ * @param {Features} [featureFlags]
+ */
+function buildBaseConfig(featureFlags) {
+  const { react: hasReact, vitest: hasVitest, astro: hasAstro } = resolveFeatures(featureFlags);
+
+  /** @type {string[]} */
+  const plugins = ["eslint", "typescript", "unicorn", "oxc", "import"];
+  if (hasReact) {
+    plugins.push("react", "jsx-a11y");
+  }
+  if (hasVitest) {
+    plugins.push("vitest");
+  }
+
+  /** @type {Record<string, unknown>} */
+  const rules = {
     "import/no-duplicates": ["warn", { preferInline: true }],
     "import/no-unassigned-import": "off",
 
@@ -79,8 +68,33 @@ const baseConfig = defineConfig({
     "typescript/unbound-method": "off",
     "typescript/ban-ts-comment": "off",
     "typescript/consistent-type-definitions": "off",
-  },
-  overrides: [
+  };
+
+  if (hasReact) {
+    Object.assign(rules, {
+      "react/rules-of-hooks": "error",
+      "react/exhaustive-deps": "error",
+      "react/react-compiler": "error",
+      "react/function-component-definition": [
+        "error",
+        {
+          namedComponents: "function-declaration",
+          unnamedComponents: "arrow-function",
+        },
+      ],
+      "react/react-in-jsx-scope": "off",
+      "jsx-a11y/label-has-associated-control": [
+        "error",
+        {
+          assert: "either",
+        },
+      ],
+      "jsx-a11y/prefer-tag-over-role": "off",
+    });
+  }
+
+  /** @type {import("oxlint").OxlintConfig["overrides"]} */
+  const overrides = [
     {
       // Source files must not import test files
       files: ["**/*.{js,jsx,cjs,mjs,ts,tsx,cts,mts}"],
@@ -108,7 +122,10 @@ const baseConfig = defineConfig({
         ],
       },
     },
-    {
+  ];
+
+  if (hasVitest) {
+    overrides.push({
       files: testGlobs,
       excludeFiles: playwrightTestGlobs,
       env: {
@@ -117,8 +134,11 @@ const baseConfig = defineConfig({
       rules: {
         "vitest/no-focused-tests": "warn",
       },
-    },
-    {
+    });
+  }
+
+  if (hasReact) {
+    overrides.push({
       // Playwright specs aren't React components/hooks consumers
       files: playwrightGlobs,
       rules: {
@@ -126,11 +146,66 @@ const baseConfig = defineConfig({
         "react/exhaustive-deps": "off",
         "react/react-compiler": "off",
       },
-    },
-  ],
-});
+    });
+  }
 
-export function createConfig(config = {}) {
+  if (hasAstro) {
+    overrides.push({
+      // Oxlint lints .astro frontmatter + <script> only (no template rules).
+      files: ["**/*.astro"],
+      env: {
+        astro: true,
+      },
+      rules: {
+        // Make Astro globals meaningful; TS handles most .ts undef cases.
+        "no-undef": "error",
+      },
+    });
+  }
+
+  return defineConfig({
+    // Setting `plugins` replaces defaults — include the full desired set.
+    plugins,
+    options: {
+      // Requires peer `oxlint-tsgolint`. Consumers may set `typeAware: false` to opt out.
+      typeAware: true,
+    },
+    categories: {
+      correctness: "error",
+      suspicious: "warn",
+    },
+    env: {
+      browser: true,
+      node: true,
+    },
+    ignorePatterns: [
+      "**/.astro/**",
+      "**/.cache/**",
+      "**/.react-router/**",
+      "**/.next/**",
+      "**/.vercel/**",
+      "**/node_modules/**",
+      "**/build/**",
+      "**/public/build/**",
+      "**/playwright-report/**",
+      "**/playwright-results/**",
+      "**/playwright/report/**",
+      "**/playwright/results/**",
+      "**/server-build/**",
+      "**/dist/**",
+      "**/coverage/**",
+    ],
+    rules,
+    overrides,
+  });
+}
+
+/**
+ * @param {import("oxlint").OxlintConfig} [config]
+ * @param {Features} [features] Explicit feature flags; omit to auto-detect via package resolution.
+ */
+export function createConfig(config = {}, features) {
+  const baseConfig = buildBaseConfig(features);
   return defineConfig({
     ...baseConfig,
     ...config,

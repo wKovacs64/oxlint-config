@@ -14,7 +14,7 @@ Native **React hooks** + experimental **`react/react-compiler`**, **type-aware**
 pnpm add --save-dev @wkovacs64/oxlint-config oxlint oxlint-tsgolint
 ```
 
-Requires Node `^20.19.0 || >=22.12.0` (Oxlint JS/TS config needs a TS-capable Node runtime).
+Requires Node `>=24` (Oxlint JS/TS config needs a TS-capable Node runtime).
 
 ### Usage
 

@@ -20,8 +20,8 @@ function has(pkgName) {
   }
 }
 
-/** @type {Record<string, "off"> | undefined} */
-let cachedVitestRuleOffs;
+/** @type {string[] | undefined} */
+let cachedVitestRuleKeys;
 
 /**
  * Every native `vitest/*` rule key from the installed oxlint schema.
@@ -30,21 +30,21 @@ let cachedVitestRuleOffs;
  * @returns {Record<string, "off">}
  */
 function vitestRuleOffs() {
-  if (cachedVitestRuleOffs) {
-    return cachedVitestRuleOffs;
-  }
-  const oxlintPkg = fileURLToPath(import.meta.resolve("oxlint/package.json"));
-  const schema = readFileSync(join(dirname(oxlintPkg), "configuration_schema.json"), "utf8");
-  const keys = new Set([...schema.matchAll(/"(vitest\/[^"]+)"/g)].map((match) => match[1]));
-  if (keys.size === 0) {
-    throw new Error("oxlint configuration_schema.json: no vitest/* rules found");
+  if (!cachedVitestRuleKeys) {
+    const oxlintPkg = fileURLToPath(import.meta.resolve("oxlint/package.json"));
+    const schema = readFileSync(join(dirname(oxlintPkg), "configuration_schema.json"), "utf8");
+    cachedVitestRuleKeys = [
+      ...new Set([...schema.matchAll(/"(vitest\/[^"]+)"/g)].map((match) => match[1])),
+    ];
+    if (cachedVitestRuleKeys.length === 0) {
+      throw new Error("oxlint configuration_schema.json: no vitest/* rules found");
+    }
   }
   /** @type {Record<string, "off">} */
   const offs = {};
-  for (const key of keys) {
+  for (const key of cachedVitestRuleKeys) {
     offs[key] = "off";
   }
-  cachedVitestRuleOffs = offs;
   return offs;
 }
 
@@ -157,8 +157,8 @@ function buildBaseConfig(featureFlags) {
 
   if (hasVitest) {
     overrides.push({
-      files: testGlobs,
-      excludeFiles: playwrightTestGlobs,
+      files: [...testGlobs],
+      excludeFiles: [...playwrightTestGlobs],
       env: {
         vitest: true,
       },
@@ -169,7 +169,7 @@ function buildBaseConfig(featureFlags) {
     // Categories enable vitest/* globally once the plugin is on; turn them all
     // off under Playwright paths (excludeFiles on the Vitest override is not enough).
     overrides.push({
-      files: playwrightGlobs,
+      files: [...playwrightGlobs],
       rules: vitestRuleOffs(),
     });
   }
@@ -177,7 +177,7 @@ function buildBaseConfig(featureFlags) {
   if (hasReact) {
     overrides.push({
       // Playwright specs aren't React components/hooks consumers
-      files: playwrightGlobs,
+      files: [...playwrightGlobs],
       rules: {
         "react/rules-of-hooks": "off",
         "react/exhaustive-deps": "off",

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createConfig } from "../index.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -90,6 +92,24 @@ assert.ok(
 );
 console.log("ok features all-on enables react/vitest/astro and isolates playwright");
 
+vitestOverride.files[0] = "**/mutated-tests/**";
+vitestOverride.excludeFiles[0] = "**/mutated-playwright/**";
+playwrightVitestOff.files[0] = "**/mutated-playwright/**";
+playwrightVitestOff.rules["vitest/expect-expect"] = "error";
+const independentConfig = createConfig({}, { react: true, vitest: true, astro: true });
+const independentVitestOverride = independentConfig.overrides.find((o) => o.env?.vitest);
+const independentPlaywrightVitestOff = independentConfig.overrides.find(
+  (o) =>
+    Array.isArray(o.files) &&
+    o.files.includes("**/playwright/**") &&
+    o.rules?.["vitest/expect-expect"],
+);
+assert.equal(independentVitestOverride.files[0], "**/tests/**");
+assert.equal(independentVitestOverride.excludeFiles[0], "**/playwright/**/*.spec.*");
+assert.deepEqual(independentPlaywrightVitestOff.files, ["**/playwright/**"]);
+assert.equal(independentPlaywrightVitestOff.rules["vitest/expect-expect"], "off");
+console.log("ok createConfig results own playwright vitest override graphs");
+
 // Auto-detect matches package tree resolution from this module
 const detected = createConfig();
 assert.equal(detected.plugins.includes("react"), canResolve("react"));
@@ -103,109 +123,146 @@ assert.equal(
 console.log("ok createConfig() auto-detect matches package tree");
 
 /**
- * @param {string} file
- * @param {{ expectFail?: boolean, configPath?: string }} [opts]
+ * @typedef {{ code: string, severity: string }} ExpectedDiagnostic
  */
-function run(file, { expectFail = false, configPath = config } = {}) {
-  const target = path.join(root, "fixtures", file);
-  const result = spawnSync(oxlintBin, ["-c", configPath, target], {
-    encoding: "utf8",
-    cwd: root,
-  });
-  const failed = result.status !== 0;
-  const ok = expectFail ? failed : !failed;
-  const label = expectFail ? "expect diagnostics" : "expect clean";
-  if (!ok) {
-    console.error(`FAIL ${file} (${label})`);
-    console.error(result.stdout);
-    console.error(result.stderr);
-    process.exitCode = 1;
-    return;
-  }
-  console.log(`ok ${file} (${label})`);
-}
 
 /**
- * @param {string} file
- * @param {{
- *   configPath?: string,
- *   forbidVitest?: boolean,
- *   include?: Array<{ code: string, severity: string }>,
- * }} [opts]
+ * @param {string} target
+ * @param {{ configPath?: string, expected?: ExpectedDiagnostic[], label?: string }} [opts]
  */
-function runJson(file, { configPath = config, forbidVitest = false, include = [] } = {}) {
-  const target = path.join(root, "fixtures", file);
+function runJson(target, { configPath = config, expected = [], label } = {}) {
+  const display = label ?? path.relative(path.join(root, "fixtures"), target);
   const result = spawnSync(oxlintBin, ["-c", configPath, "-f", "json", target], {
     encoding: "utf8",
     cwd: root,
   });
-  /** @type {{ diagnostics?: Array<{ code: string, severity: string }> }} */
+  const stderr = result.stderr?.trim() ?? "";
+  const fail = (reason, detail = "") => {
+    console.error(`FAIL ${display} (${reason})`);
+    if (result.error) console.error(result.error.message);
+    if (stderr) console.error(stderr);
+    if (detail) console.error(detail);
+    process.exitCode = 1;
+  };
+
+  if (result.error || result.signal || stderr) {
+    fail(result.signal ? `terminated by ${result.signal}` : "oxlint execution failed");
+    return;
+  }
+
+  /** @type {{ diagnostics?: Array<ExpectedDiagnostic> }} */
   let payload;
   try {
     payload = JSON.parse(result.stdout);
   } catch {
-    console.error(`FAIL ${file} (invalid json output)`);
-    console.error(result.stdout);
-    console.error(result.stderr);
-    process.exitCode = 1;
+    fail("invalid json output", result.stdout?.trim());
     return;
   }
-  const diagnostics = payload.diagnostics ?? [];
-  const vitestDiagnostics = diagnostics.filter((d) => d.code.startsWith("vitest("));
-
-  if (forbidVitest && vitestDiagnostics.length > 0) {
-    console.error(`FAIL ${file} (expected zero vitest/* diagnostics)`);
-    console.error(JSON.stringify(vitestDiagnostics, null, 2));
-    process.exitCode = 1;
+  if (!Array.isArray(payload.diagnostics)) {
+    fail("json output has no diagnostics array");
     return;
   }
 
-  for (const wanted of include) {
-    const hit = diagnostics.some((d) => d.code === wanted.code && d.severity === wanted.severity);
-    if (!hit) {
-      console.error(
-        `FAIL ${file} (missing ${wanted.severity} ${wanted.code}); got ${JSON.stringify(diagnostics)}`,
-      );
-      process.exitCode = 1;
-      return;
-    }
+  const actual = payload.diagnostics.map(({ code, severity }) => `${severity} ${code}`).toSorted();
+  const wanted = expected.map(({ code, severity }) => `${severity} ${code}`).toSorted();
+  const expectedStatus = wanted.length === 0 ? 0 : 1;
+  if (result.status !== expectedStatus || actual.join("\n") !== wanted.join("\n")) {
+    fail(
+      `expected status ${expectedStatus} and [${wanted.join(", ")}], got ${result.status} and [${actual.join(", ")}]`,
+    );
+    return;
   }
 
-  console.log(`ok ${file} (json diagnostics)`);
+  console.log(`ok ${display} (${wanted.length === 0 ? "clean" : wanted.join(", ")})`);
 }
 
-run("hooks-good.tsx");
-run("hooks-bad.tsx", { expectFail: true });
-run("compiler-bad.tsx", { expectFail: true });
-run("unused-args-ok.ts");
-run("test-import-bad.ts", { expectFail: true });
-run("playwright/hooks-ok.ts");
-run("playwright/focused.spec.ts");
-run("playwright/test-base.ts");
-runJson("playwright/focused.spec.ts", { forbidVitest: true });
-runJson("playwright/direct.spec.ts", { forbidVitest: true });
-runJson("playwright/custom-fixture.spec.ts", { forbidVitest: true });
-runJson("playwright/leak-probe.spec.ts", { forbidVitest: true });
-run("vitest-focused-bad.test.ts", { expectFail: true });
-runJson("vitest-focused-bad.test.ts", {
-  include: [{ code: "vitest(no-focused-tests)", severity: "warning" }],
+const fixture = (file) => path.join(root, "fixtures", file);
+const error = (code) => [{ code, severity: "error" }];
+const warning = (code) => [{ code, severity: "warning" }];
+
+runJson(fixture("hooks-good.tsx"));
+runJson(fixture("hooks-bad.tsx"), {
+  expected: [
+    { code: "react(react-compiler)", severity: "warning" },
+    { code: "react-hooks(rules-of-hooks)", severity: "error" },
+  ],
 });
-runJson("vitest-no-expect-bad.test.ts", {
-  include: [{ code: "vitest(expect-expect)", severity: "error" }],
+runJson(fixture("compiler-bad.tsx"), { expected: warning("react(react-compiler)") });
+runJson(fixture("unused-args-ok.ts"));
+runJson(fixture("test-import-bad.ts"), { expected: error("eslint(no-restricted-imports)") });
+runJson(fixture("playwright/hooks-ok.ts"));
+runJson(fixture("playwright/focused.spec.ts"));
+runJson(fixture("playwright/test-base.ts"));
+runJson(fixture("playwright/direct.spec.ts"));
+runJson(fixture("playwright/custom-fixture.spec.ts"));
+runJson(fixture("playwright/leak-probe.spec.ts"));
+runJson(fixture("vitest-focused-bad.test.ts"), {
+  expected: warning("vitest(no-focused-tests)"),
 });
-runJson("vitest-untyped-mock-bad.test.ts", {
-  include: [{ code: "vitest(require-mock-type-parameters)", severity: "error" }],
+runJson(fixture("vitest-no-expect-bad.test.ts"), {
+  expected: error("vitest(expect-expect)"),
 });
-run("role-img-ok.tsx");
-run("role-required-bad.tsx", { expectFail: true });
-run("side-effect-import-ok.ts");
-run("unbound-method-ok.test.ts");
-run("floating-promise-bad.ts", { expectFail: true });
-run("void-expression-bad.ts", { expectFail: true });
+runJson(fixture("vitest-untyped-mock-bad.test.ts"), {
+  expected: error("vitest(require-mock-type-parameters)"),
+});
+runJson(fixture("role-img-ok.tsx"));
+runJson(fixture("role-required-bad.tsx"), {
+  expected: error("jsx-a11y(role-has-required-aria-props)"),
+});
+runJson(fixture("side-effect-import-ok.ts"));
+runJson(fixture("unbound-method-ok.test.ts"));
+runJson(fixture("floating-promise-bad.ts"), {
+  expected: error("typescript(no-floating-promises)"),
+});
+runJson(fixture("void-expression-bad.ts"), {
+  expected: error("typescript(no-confusing-void-expression)"),
+});
 
 const astroConfig = path.join(root, "fixtures/config-astro.ts");
-run("astro-global-ok.astro", { configPath: astroConfig });
-run("astro-global-bad.astro", { expectFail: true, configPath: astroConfig });
+runJson(fixture("astro-global-ok.astro"), { configPath: astroConfig });
+runJson(fixture("astro-global-bad.astro"), {
+  configPath: astroConfig,
+  expected: error("eslint(no-undef)"),
+});
+
+const isolatedRoot = mkdtempSync(path.join(tmpdir(), "oxlint-config-no-vitest-"));
+try {
+  const isolatedPackage = path.join(isolatedRoot, "node_modules", "@wkovacs64", "oxlint-config");
+  mkdirSync(isolatedPackage, { recursive: true });
+  copyFileSync(path.join(root, "index.js"), path.join(isolatedPackage, "index.js"));
+  writeFileSync(
+    path.join(isolatedPackage, "package.json"),
+    JSON.stringify({ name: "@wkovacs64/oxlint-config", type: "module", exports: "./index.js" }),
+  );
+  symlinkSync(
+    path.join(root, "node_modules", "oxlint"),
+    path.join(isolatedRoot, "node_modules", "oxlint"),
+    "dir",
+  );
+
+  const isolatedIndex = path.join(isolatedPackage, "index.js");
+  const { createConfig: createIsolatedConfig } = await import(pathToFileURL(isolatedIndex));
+  const isolatedConfig = createIsolatedConfig();
+  assert.ok(!isolatedConfig.plugins.includes("vitest"));
+  assert.ok(!isolatedConfig.overrides.some((o) => o.env?.vitest));
+  assert.ok(!isolatedConfig.overrides.some((o) => o.files?.includes?.("**/playwright/**")));
+
+  const isolatedConfigPath = path.join(isolatedRoot, "oxlint.config.mjs");
+  writeFileSync(
+    isolatedConfigPath,
+    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig();\n',
+  );
+  const isolatedProbe = path.join(isolatedRoot, "playwright", "leak-probe.spec.ts");
+  mkdirSync(path.dirname(isolatedProbe));
+  copyFileSync(fixture("playwright/leak-probe.spec.ts"), isolatedProbe);
+  runJson(isolatedProbe, {
+    configPath: isolatedConfigPath,
+    label: "isolated consumer without Vitest",
+  });
+  console.log("ok isolated auto-detection omits Vitest layer");
+} finally {
+  rmSync(isolatedRoot, { recursive: true, force: true });
+}
 
 if (process.exitCode) {
   console.error("smoke failed");

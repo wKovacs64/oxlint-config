@@ -65,6 +65,39 @@ export default createConfig(
 );
 ```
 
+### Module boundaries
+
+Module-boundary enforcement is opt-in. Point it at the `#/` alias for the directory containing your
+modules:
+
+```ts
+import { createConfig } from "@wkovacs64/oxlint-config";
+
+export default createConfig(
+  {},
+  {
+    moduleBoundaries: { modulesPath: "#/app/modules" },
+  },
+);
+```
+
+For a module directory named `orders`, its public entrypoints are `orders` and `orders.server`, with
+an optional known JavaScript/TypeScript extension. Files outside `app/modules` and files in other
+modules must use those aliased public entrypoints. A module may use relative or aliased imports of
+its own internals, including nested parent-relative imports. Relative imports and re-exports into a
+module are rejected from outside that module. Aliased module paths containing `.` or `..` segments
+are always rejected.
+
+The configured directory must exist. The `#/` alias is resolved from the process working directory,
+so run Oxlint from the project root. Alias restrictions use Oxlint's native `no-restricted-imports`;
+importer-aware relative restrictions are isolated in one JS plugin because Oxlint JS plugins are
+alpha.
+
+The boundary applies to static `import` declarations and named/star re-exports with a source. In
+Astro files, Oxlint enforces these declarations in frontmatter and `<script>`; Astro template
+expressions remain outside Oxlint's linted regions. Dynamic `import()`, `require()`, TypeScript
+import-equals, and TypeScript import types are outside its semantic boundary.
+
 ### IDE
 
 VS Code / forks: install [Oxc](https://marketplace.visualstudio.com/items?itemName=oxc.oxc-vscode)

@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "oxlint";
 
@@ -7,6 +7,12 @@ const vitestGlobs = ["**/__tests__/**/*", "**/*.test.*"];
 const testGlobs = ["**/tests/**", "**/#tests/**", ...vitestGlobs];
 const playwrightGlobs = ["**/playwright/**"];
 const playwrightTestGlobs = ["**/playwright/**/*.spec.*"];
+const sourceGlobs = ["**/*.{js,jsx,cjs,mjs,ts,tsx,cts,mts}"];
+const moduleBoundaryGlobs = [...sourceGlobs, "**/*.astro"];
+const sourceExtensions = ["js", "jsx", "cjs", "mjs", "ts", "tsx", "cts", "mts"];
+const moduleBoundariesPlugin = fileURLToPath(
+  new URL("./plugins/module-boundaries.js", import.meta.url),
+);
 
 /**
  * @param {string} pkgName
@@ -49,8 +55,152 @@ function vitestRuleOffs() {
 }
 
 /**
- * @typedef {{ react?: boolean, vitest?: boolean, astro?: boolean }} Features
+ * @typedef {{ modulesPath: string }} ModuleBoundaries
+ * @typedef {{ react?: boolean, vitest?: boolean, astro?: boolean, moduleBoundaries?: ModuleBoundaries }} Features
  */
+
+function escapeGlob(value) {
+  return value.replace(/[?*+@!()[\]{}]/g, "\\$&");
+}
+
+function escapeRegex(value) {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+}
+
+function testImportPatterns() {
+  return [
+    {
+      group: [
+        "**/tests/**",
+        "**/#tests/**",
+        "**/__tests__/**",
+        // bare + extensioned (e.g. ./foo.test, ./foo.test.ts)
+        "**/*.test",
+        "**/*.test.*",
+        "**/*.spec",
+        "**/*.spec.*",
+      ],
+      message: "Do not import test files in source files",
+    },
+  ];
+}
+
+/**
+ * @param {ModuleBoundaries} options
+ */
+function buildModuleBoundaries(options) {
+  if (!options || typeof options.modulesPath !== "string") {
+    throw new Error("moduleBoundaries.modulesPath must be a #/ alias path");
+  }
+
+  const modulesPath = options.modulesPath.replaceAll("\\", "/");
+  const pathParts = modulesPath.split("/");
+  if (
+    pathParts[0] !== "#" ||
+    pathParts.length < 2 ||
+    pathParts.some((part, index) => index > 0 && (part === "" || part === "." || part === ".."))
+  ) {
+    throw new Error("moduleBoundaries.modulesPath must be a #/ alias path");
+  }
+
+  const filesystemPath = pathParts.slice(1).join("/");
+  const modulesRoot = resolve(process.cwd(), filesystemPath);
+  if (!statSync(modulesRoot, { throwIfNoEntry: false })?.isDirectory()) {
+    throw new Error(`Module boundaries directory does not exist: ${modulesRoot}`);
+  }
+
+  const moduleNames = readdirSync(modulesRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted();
+  const escapedModulesPath = pathParts.map(escapeGlob).join("/");
+  const publicImportGroups = new Map(
+    moduleNames.map((moduleName) => {
+      const escapedModule = escapeGlob(moduleName);
+      const entrypoint = `${escapedModulesPath}/${escapedModule}/${escapedModule}`;
+      return [
+        moduleName,
+        [
+          `${escapedModulesPath}/${escapedModule}`,
+          `${escapedModulesPath}/${escapedModule}/**`,
+          `!${entrypoint}`,
+          `!${entrypoint}.server`,
+          ...sourceExtensions.flatMap((extension) => [
+            `!${entrypoint}.${extension}`,
+            `!${entrypoint}.server.${extension}`,
+          ]),
+        ],
+      ];
+    }),
+  );
+  const restrictedPatterns = (names) => {
+    const allowedNames = moduleNames
+      .filter((name) => !names.includes(name))
+      .map(escapeRegex)
+      .join("|");
+    const allowedModuleNonCanonical =
+      allowedNames === "" ? "" : `|(?:${allowedNames})/(?:/|.*//|(?:[^/]*/)*\\.{1,2}(?:/|$))`;
+    return [
+      {
+        regex: `^${escapeRegex(modulesPath)}/(?:/|\\.{1,2}(?:/|$)${allowedModuleNonCanonical})`,
+        message: "Use canonical module aliases",
+      },
+      ...names.map((name) => ({
+        group: publicImportGroups.get(name),
+        message: "Import modules through their public entrypoints",
+      })),
+    ];
+  };
+  const escapedFilesystemPath = filesystemPath.split("/").map(escapeGlob).join("/");
+  const moduleGlobs = moduleNames.map(
+    (moduleName) => `${escapedFilesystemPath}/${escapeGlob(moduleName)}/**`,
+  );
+  const boundaryContexts = [
+    {
+      files: moduleBoundaryGlobs,
+      sourceFiles: sourceGlobs,
+      excludeFiles: moduleGlobs,
+      moduleNames,
+    },
+    ...moduleNames.map((moduleName) => {
+      const modulePath = `${escapedFilesystemPath}/${escapeGlob(moduleName)}`;
+      return {
+        files: [`${modulePath}/**`],
+        sourceFiles: [`${modulePath}/**/*.{${sourceExtensions.join(",")}}`],
+        excludeFiles: [],
+        moduleNames: moduleNames.filter((name) => name !== moduleName),
+      };
+    }),
+  ];
+
+  return {
+    jsPlugins: [moduleBoundariesPlugin],
+    rules: {
+      "module-boundaries/no-relative-module-imports": ["error", { modulesRoot, moduleNames }],
+    },
+    overrides: boundaryContexts.flatMap(
+      ({ files, sourceFiles, excludeFiles, moduleNames: restrictedNames }) => [
+        {
+          files,
+          excludeFiles,
+          rules: {
+            "no-restricted-imports": ["error", { patterns: restrictedPatterns(restrictedNames) }],
+          },
+        },
+        {
+          files: sourceFiles,
+          excludeFiles: [...excludeFiles, ...testGlobs, ...playwrightGlobs],
+          rules: {
+            "no-restricted-imports": [
+              "error",
+              { patterns: [...testImportPatterns(), ...restrictedPatterns(restrictedNames)] },
+            ],
+          },
+        },
+      ],
+    ),
+  };
+}
 
 /**
  * @param {Features} [features]
@@ -68,6 +218,10 @@ function resolveFeatures(features = {}) {
  */
 function buildBaseConfig(featureFlags) {
   const { react: hasReact, vitest: hasVitest, astro: hasAstro } = resolveFeatures(featureFlags);
+
+  const moduleBoundaries = featureFlags?.moduleBoundaries
+    ? buildModuleBoundaries(featureFlags.moduleBoundaries)
+    : undefined;
 
   /** @type {string[]} */
   const plugins = ["eslint", "typescript", "unicorn", "oxc", "import"];
@@ -128,29 +282,10 @@ function buildBaseConfig(featureFlags) {
   const overrides = [
     {
       // Source files must not import test files
-      files: ["**/*.{js,jsx,cjs,mjs,ts,tsx,cts,mts}"],
+      files: sourceGlobs,
       excludeFiles: [...testGlobs, ...playwrightGlobs],
       rules: {
-        "no-restricted-imports": [
-          "error",
-          {
-            patterns: [
-              {
-                group: [
-                  "**/tests/**",
-                  "**/#tests/**",
-                  "**/__tests__/**",
-                  // bare + extensioned (e.g. ./foo.test, ./foo.test.ts)
-                  "**/*.test",
-                  "**/*.test.*",
-                  "**/*.spec",
-                  "**/*.spec.*",
-                ],
-                message: "Do not import test files in source files",
-              },
-            ],
-          },
-        ],
+        "no-restricted-imports": ["error", { patterns: testImportPatterns() }],
       },
     },
   ];
@@ -203,6 +338,7 @@ function buildBaseConfig(featureFlags) {
   return defineConfig({
     // Setting `plugins` replaces defaults — include the full desired set.
     plugins,
+    jsPlugins: moduleBoundaries?.jsPlugins,
     options: {
       // Requires peer `oxlint-tsgolint`. Consumers may set `typeAware: false` to opt out.
       typeAware: true,
@@ -232,8 +368,8 @@ function buildBaseConfig(featureFlags) {
       "**/dist/**",
       "**/coverage/**",
     ],
-    rules,
-    overrides,
+    rules: { ...rules, ...moduleBoundaries?.rules },
+    overrides: [...overrides, ...(moduleBoundaries?.overrides ?? [])],
   });
 }
 

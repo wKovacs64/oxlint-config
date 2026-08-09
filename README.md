@@ -49,11 +49,6 @@ VS Code / forks: install [Oxc](https://marketplace.visualstudio.com/items?itemNa
 **On by default** (`options.typeAware: true`). Requires the `oxlint-tsgolint` peer — without it
 Oxlint exits with `Failed to find tsgolint executable`.
 
-Also enabled:
-
-- `typescript/no-floating-promises` (`ignoreIIFE: true`)
-- `typescript/no-confusing-void-expression` (`ignoreArrowShorthand: true`)
-
 Type-aware adds analysis cost on large projects. Opt out in the consumer root config:
 
 ```ts

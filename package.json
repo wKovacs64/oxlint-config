@@ -4,14 +4,10 @@
   "private": false,
   "description": "@wKovacs64 Oxlint config",
   "keywords": [
-    "lint",
-    "linter",
     "oxc",
     "oxlint",
     "oxlint-config",
-    "react",
-    "react-compiler",
-    "react-hooks"
+    "wkovacs64"
   ],
   "homepage": "https://github.com/wKovacs64/oxlint-config#readme",
   "bugs": {

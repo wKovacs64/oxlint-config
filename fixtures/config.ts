@@ -1,6 +1,29 @@
-import { defineConfig } from "oxlint";
-import baseConfig from "../index.js";
+import { createConfig } from "../index.js";
 
-export default defineConfig({
-  extends: [baseConfig],
+export default createConfig({
+  env: {
+    browser: false,
+    serviceworker: true,
+  },
+  ignorePatterns: ["generated/**"],
+  options: {
+    denyWarnings: true,
+  },
+  plugins: ["eslint"],
+  rules: {
+    "react/react-compiler": "warn",
+  },
+  settings: {
+    custom: {
+      enabled: true,
+    },
+  },
+  overrides: [
+    {
+      files: ["**/*.custom.ts"],
+      rules: {
+        "no-debugger": "off",
+      },
+    },
+  ],
 });

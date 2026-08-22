@@ -13,7 +13,6 @@ const sourceExtensions = ["js", "jsx", "cjs", "mjs", "ts", "tsx", "cts", "mts"];
 const moduleBoundariesPlugin = fileURLToPath(
   new URL("./plugins/module-boundaries.js", import.meta.url),
 );
-
 /**
  * @param {string} pkgName
  */
@@ -259,7 +258,28 @@ function buildBaseConfig(featureFlags) {
     Object.assign(rules, {
       "react/rules-of-hooks": "error",
       "react/exhaustive-deps": "error",
-      "react/react-compiler": "error",
+      "react/capitalized-calls": "error",
+      "react/error-boundaries": "error",
+      "react/exhaustive-effect-dependencies": "error",
+      "react/globals": "error",
+      "react/hooks": "error",
+      "react/immutability": "error",
+      "react/incompatible-library": "error",
+      "react/invariant": "error",
+      "react/memo-dependencies": "error",
+      "react/no-deriving-state-in-effects": "error",
+      "react/preserve-manual-memoization": "error",
+      "react/purity": "error",
+      "react/refs": "error",
+      "react/rule-suppression": "error",
+      "react/set-state-in-effect": "error",
+      "react/set-state-in-render": "error",
+      "react/static-components": "error",
+      "react/syntax": "error",
+      "react/todo": "error",
+      "react/unsupported-syntax": "error",
+      "react/use-memo": "error",
+      "react/void-use-memo": "error",
       "react/function-component-definition": [
         "error",
         {
@@ -316,7 +336,28 @@ function buildBaseConfig(featureFlags) {
       rules: {
         "react/rules-of-hooks": "off",
         "react/exhaustive-deps": "off",
-        "react/react-compiler": "off",
+        "react/capitalized-calls": "off",
+        "react/error-boundaries": "off",
+        "react/exhaustive-effect-dependencies": "off",
+        "react/globals": "off",
+        "react/hooks": "off",
+        "react/immutability": "off",
+        "react/incompatible-library": "off",
+        "react/invariant": "off",
+        "react/memo-dependencies": "off",
+        "react/no-deriving-state-in-effects": "off",
+        "react/preserve-manual-memoization": "off",
+        "react/purity": "off",
+        "react/refs": "off",
+        "react/rule-suppression": "off",
+        "react/set-state-in-effect": "off",
+        "react/set-state-in-render": "off",
+        "react/static-components": "off",
+        "react/syntax": "off",
+        "react/todo": "off",
+        "react/unsupported-syntax": "off",
+        "react/use-memo": "off",
+        "react/void-use-memo": "off",
       },
     });
   }

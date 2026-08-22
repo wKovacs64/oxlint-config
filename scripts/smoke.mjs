@@ -42,7 +42,7 @@ assert.ok(mergedConfig.plugins.includes("vitest"));
 assert.ok(mergedConfig.plugins.includes("react"));
 assert.ok(mergedConfig.plugins.includes("jsx-a11y"));
 assert.deepEqual(mergedConfig.settings.custom, { enabled: true });
-assert.equal(mergedConfig.rules["react/react-compiler"], "warn");
+assert.equal(mergedConfig.rules["no-debugger"], "warn");
 assert.equal(mergedConfig.overrides.at(-1).files[0], "**/*.custom.ts");
 console.log("ok createConfig merges consumer config");
 
@@ -62,13 +62,44 @@ assert.ok(allOn.plugins.includes("react"));
 assert.ok(allOn.plugins.includes("jsx-a11y"));
 assert.ok(allOn.plugins.includes("vitest"));
 assert.equal(allOn.rules["react/rules-of-hooks"], "error");
+const reactCompilerRuleNames = [
+  "capitalized-calls",
+  "error-boundaries",
+  "exhaustive-effect-dependencies",
+  "globals",
+  "hooks",
+  "immutability",
+  "incompatible-library",
+  "invariant",
+  "memo-dependencies",
+  "no-deriving-state-in-effects",
+  "preserve-manual-memoization",
+  "purity",
+  "refs",
+  "rule-suppression",
+  "set-state-in-effect",
+  "set-state-in-render",
+  "static-components",
+  "syntax",
+  "todo",
+  "unsupported-syntax",
+  "use-memo",
+  "void-use-memo",
+];
+assert.ok(reactCompilerRuleNames.every((name) => allOn.rules[`react/${name}`] === "error"));
 assert.ok(allOn.overrides.some((o) => o.env?.vitest));
 assert.ok(
   allOn.overrides.some(
     (o) => Array.isArray(o.files) && o.files.includes("**/*.astro") && o.env?.astro === true,
   ),
 );
-assert.ok(allOn.overrides.some((o) => o.files?.includes?.("**/playwright/**")));
+const playwrightReactOff = allOn.overrides.find(
+  (o) => o.files?.includes?.("**/playwright/**") && o.rules?.["react/rules-of-hooks"] === "off",
+);
+assert.ok(playwrightReactOff);
+assert.ok(
+  reactCompilerRuleNames.every((name) => playwrightReactOff.rules[`react/${name}`] === "off"),
+);
 
 const vitestOverride = allOn.overrides.find((o) => o.env?.vitest);
 assert.ok(vitestOverride);
@@ -192,11 +223,11 @@ const warning = (code) => [{ code, severity: "warning" }];
 runJson(fixture("hooks-good.tsx"));
 runJson(fixture("hooks-bad.tsx"), {
   expected: [
-    { code: "react(react-compiler)", severity: "warning" },
+    { code: "react(hooks)", severity: "error" },
     { code: "react-hooks(rules-of-hooks)", severity: "error" },
   ],
 });
-runJson(fixture("compiler-bad.tsx"), { expected: warning("react(react-compiler)") });
+runJson(fixture("compiler-bad.tsx"), { expected: error("react(refs)") });
 runJson(fixture("unused-args-ok.ts"));
 runJson(fixture("test-import-bad.ts"), { expected: error("eslint(no-restricted-imports)") });
 runJson(fixture("playwright/hooks-ok.ts"));

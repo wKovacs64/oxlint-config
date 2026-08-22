@@ -11,7 +11,7 @@ export default createConfig({
   },
   plugins: ["eslint"],
   rules: {
-    "react/react-compiler": "warn",
+    "no-debugger": "warn",
   },
   settings: {
     custom: {

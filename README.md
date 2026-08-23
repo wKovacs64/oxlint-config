@@ -144,7 +144,7 @@ import { createConfig } from "@wkovacs64/oxlint-config";
 export default createConfig({
   ignorePatterns: ["my-generated/**"],
   rules: {
-    "react/react-compiler": "warn",
+    "no-debugger": "warn",
   },
 });
 ```
@@ -155,7 +155,6 @@ settings and rules are merged with consumer values taking precedence.
 ### Notes
 
 - Prefer Oxlint native plugins/defaults over exhaustive rule dumps.
-- `react/react-compiler` is experimental upstream; severity may be overridden per project.
 - `createConfig` combines consumer plugins with the shared plugin set.
 - `no-unused-vars` left on Oxlint defaults (`args: after-used`, built-in `argsIgnorePattern: ^_`
   when the rule is not customized). Not tuning `ignoreRestSiblings` / `varsIgnorePattern`.

@@ -1,5 +1,11 @@
 # @wkovacs64/oxlint-config
 
+## 0.2.2
+
+### Patch Changes
+
+- [#19](https://github.com/wKovacs64/oxlint-config/pull/19) [`9e84704`](https://github.com/wKovacs64/oxlint-config/commit/9e84704ac545597fdff1be0f99f31ab4e1d84b46) Thanks [@wKovacs64](https://github.com/wKovacs64)! - Allow bare `_` for unused parameters.
+
 ## 0.2.1
 
 ### Patch Changes

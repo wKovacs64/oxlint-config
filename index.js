@@ -233,6 +233,8 @@ function buildBaseConfig(featureFlags) {
 
   /** @type {Record<string, unknown>} */
   const rules = {
+    "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+
     "import/no-duplicates": ["warn", { preferInline: true }],
     "import/no-unassigned-import": "off",
 

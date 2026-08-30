@@ -1,3 +1,3 @@
-export function usesTrailing(a: number, _ignored: string, b: number) {
+export function usesTrailing(a: number, _: string, b: number) {
   return a + b;
 }

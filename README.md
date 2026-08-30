@@ -156,8 +156,8 @@ settings and rules are merged with consumer values taking precedence.
 
 - Prefer Oxlint native plugins/defaults over exhaustive rule dumps.
 - `createConfig` combines consumer plugins with the shared plugin set.
-- `no-unused-vars` left on Oxlint defaults (`args: after-used`, built-in `argsIgnorePattern: ^_`
-  when the rule is not customized). Not tuning `ignoreRestSiblings` / `varsIgnorePattern`.
+- `no-unused-vars` explicitly allows unused arguments prefixed with `_`, including bare `_`. Other
+  options remain at their defaults.
 - Import **ordering** is not configured (no native `import/order`); use a formatter if you care.
 - **Astro:** Oxlint lints frontmatter + `<script>` only — no template/`client:*` rules (see
   [compatibility](https://oxc.rs/compatibility.html)).

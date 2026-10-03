@@ -59,11 +59,17 @@ export default createConfig(
   {},
   {
     react: false,
+    jsxA11y: true,
     vitest: true,
     astro: true,
   },
 );
 ```
+
+`jsxA11y` controls the `jsx-a11y` plugin and shared accessibility rules independently of React. It
+defaults to the resolved `react` feature, preserving existing React defaults. Set `jsxA11y: true`
+for non-React JSX projects, or `jsxA11y: false` to disable accessibility checks while keeping React
+enabled. No additional framework detection is performed.
 
 ### Module boundaries
 

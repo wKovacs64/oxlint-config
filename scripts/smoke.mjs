@@ -52,16 +52,59 @@ assert.ok(!noReact.plugins.includes("react"));
 assert.ok(!noReact.plugins.includes("jsx-a11y"));
 assert.ok(!noReact.plugins.includes("vitest"));
 assert.equal(noReact.rules["react/rules-of-hooks"], undefined);
+assert.ok(!Object.keys(noReact.rules).some((name) => name.startsWith("jsx-a11y/")));
 assert.ok(!noReact.overrides.some((o) => o.env?.vitest));
 assert.ok(!noReact.overrides.some((o) => o.env?.astro));
 assert.ok(!noReact.overrides.some((o) => o.files?.includes?.("**/playwright/**")));
 console.log("ok features all-off strips react/vitest/astro");
+
+const nonReactJsx = createConfig({}, { react: false, jsxA11y: true, vitest: false, astro: false });
+assert.ok(nonReactJsx.plugins.includes("jsx-a11y"));
+assert.ok(!nonReactJsx.plugins.includes("react"));
+assert.deepEqual(nonReactJsx.rules["jsx-a11y/label-has-associated-control"], [
+  "error",
+  { assert: "either" },
+]);
+assert.equal(nonReactJsx.rules["jsx-a11y/prefer-tag-over-role"], "off");
+assert.ok(!Object.keys(nonReactJsx.rules).some((name) => name.startsWith("react/")));
+assert.ok(
+  !nonReactJsx.overrides.some((o) =>
+    Object.keys(o.rules ?? {}).some((name) => name.startsWith("react/")),
+  ),
+);
+console.log("ok non-React JSX enables shared accessibility without React rules");
+
+const noA11y = createConfig({}, { react: true, jsxA11y: false, vitest: false, astro: false });
+assert.ok(noA11y.plugins.includes("react"));
+assert.ok(!noA11y.plugins.includes("jsx-a11y"));
+assert.equal(noA11y.rules["react/rules-of-hooks"], "error");
+assert.ok(!Object.keys(noA11y.rules).some((name) => name.startsWith("jsx-a11y/")));
+assert.ok(noA11y.overrides.some((o) => o.rules?.["react/rules-of-hooks"] === "off"));
+const bothOff = createConfig({}, { react: false, jsxA11y: false });
+assert.ok(!bothOff.plugins.includes("react"));
+assert.ok(!bothOff.plugins.includes("jsx-a11y"));
+assert.ok(
+  !Object.keys(bothOff.rules).some(
+    (name) => name.startsWith("react/") || name.startsWith("jsx-a11y/"),
+  ),
+);
+const detectedNoA11y = createConfig({}, { jsxA11y: false });
+assert.equal(detectedNoA11y.plugins.includes("react"), canResolve("react"));
+assert.ok(!detectedNoA11y.plugins.includes("jsx-a11y"));
+console.log("ok explicit accessibility disable preserves React and its Playwright exemptions");
 
 const allOn = createConfig({}, { react: true, vitest: true, astro: true });
 assert.ok(allOn.plugins.includes("react"));
 assert.ok(allOn.plugins.includes("jsx-a11y"));
 assert.ok(allOn.plugins.includes("vitest"));
 assert.equal(allOn.rules["react/rules-of-hooks"], "error");
+assert.deepEqual(allOn.rules["jsx-a11y/label-has-associated-control"], [
+  "error",
+  { assert: "either" },
+]);
+assert.equal(allOn.rules["jsx-a11y/prefer-tag-over-role"], "off");
+const bothOn = createConfig({}, { react: true, jsxA11y: true, vitest: true, astro: true });
+assert.deepEqual(bothOn, allOn);
 const reactCompilerRuleNames = [
   "capitalized-calls",
   "error-boundaries",
@@ -153,6 +196,7 @@ console.log("ok createConfig results own playwright vitest override graphs");
 // Auto-detect matches package tree resolution from this module
 const detected = createConfig();
 assert.equal(detected.plugins.includes("react"), canResolve("react"));
+assert.equal(detected.plugins.includes("jsx-a11y"), canResolve("react"));
 assert.equal(detected.plugins.includes("vitest"), canResolve("vitest"));
 assert.equal(
   detected.overrides.some(
@@ -283,6 +327,8 @@ try {
   const isolatedIndex = path.join(isolatedPackage, "index.js");
   const { createConfig: createIsolatedConfig } = await import(pathToFileURL(isolatedIndex));
   const isolatedConfig = createIsolatedConfig();
+  assert.ok(!isolatedConfig.plugins.includes("react"));
+  assert.ok(!isolatedConfig.plugins.includes("jsx-a11y"));
   assert.ok(!isolatedConfig.plugins.includes("vitest"));
   assert.ok(!isolatedConfig.overrides.some((o) => o.env?.vitest));
   assert.ok(!isolatedConfig.overrides.some((o) => o.files?.includes?.("**/playwright/**")));
@@ -300,6 +346,36 @@ try {
     label: "isolated consumer without Vitest",
   });
   console.log("ok isolated auto-detection omits Vitest layer");
+
+  const isolatedJsxProbe = path.join(isolatedRoot, "role-required-bad.tsx");
+  copyFileSync(fixture("role-required-bad.tsx"), isolatedJsxProbe);
+  runJson(isolatedJsxProbe, {
+    configPath: isolatedConfigPath,
+    label: "isolated JSX without React defaults to no accessibility",
+  });
+  writeFileSync(
+    isolatedConfigPath,
+    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig({}, { jsxA11y: true });\n',
+  );
+  runJson(isolatedJsxProbe, {
+    configPath: isolatedConfigPath,
+    expected: error("jsx-a11y(role-has-required-aria-props)"),
+    label: "isolated JSX without React opts into accessibility",
+  });
+  const isolatedJsxOk = path.join(isolatedRoot, "role-img-ok.tsx");
+  copyFileSync(fixture("role-img-ok.tsx"), isolatedJsxOk);
+  runJson(isolatedJsxOk, {
+    configPath: isolatedConfigPath,
+    label: "isolated JSX without React accepts accessible markup",
+  });
+  writeFileSync(
+    isolatedConfigPath,
+    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig({}, { react: true, jsxA11y: false });\n',
+  );
+  runJson(isolatedJsxProbe, {
+    configPath: isolatedConfigPath,
+    label: "React with accessibility explicitly disabled",
+  });
 } finally {
   rmSync(isolatedRoot, { recursive: true, force: true });
 }

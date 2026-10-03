@@ -55,7 +55,7 @@ function vitestRuleOffs() {
 
 /**
  * @typedef {{ modulesPath: string }} ModuleBoundaries
- * @typedef {{ react?: boolean, vitest?: boolean, astro?: boolean, moduleBoundaries?: ModuleBoundaries }} Features
+ * @typedef {{ react?: boolean, jsxA11y?: boolean, vitest?: boolean, astro?: boolean, moduleBoundaries?: ModuleBoundaries }} Features
  */
 
 function escapeGlob(value) {
@@ -205,8 +205,10 @@ function buildModuleBoundaries(options) {
  * @param {Features} [features]
  */
 function resolveFeatures(features = {}) {
+  const react = features.react ?? has("react");
   return {
-    react: features.react ?? has("react"),
+    react,
+    jsxA11y: features.jsxA11y ?? react,
     vitest: features.vitest ?? has("vitest"),
     astro: features.astro ?? has("astro"),
   };
@@ -216,7 +218,12 @@ function resolveFeatures(features = {}) {
  * @param {Features} [featureFlags]
  */
 function buildBaseConfig(featureFlags) {
-  const { react: hasReact, vitest: hasVitest, astro: hasAstro } = resolveFeatures(featureFlags);
+  const {
+    react: hasReact,
+    jsxA11y: hasJsxA11y,
+    vitest: hasVitest,
+    astro: hasAstro,
+  } = resolveFeatures(featureFlags);
 
   const moduleBoundaries = featureFlags?.moduleBoundaries
     ? buildModuleBoundaries(featureFlags.moduleBoundaries)
@@ -225,7 +232,10 @@ function buildBaseConfig(featureFlags) {
   /** @type {string[]} */
   const plugins = ["eslint", "typescript", "unicorn", "oxc", "import"];
   if (hasReact) {
-    plugins.push("react", "jsx-a11y");
+    plugins.push("react");
+  }
+  if (hasJsxA11y) {
+    plugins.push("jsx-a11y");
   }
   if (hasVitest) {
     plugins.push("vitest");
@@ -290,6 +300,11 @@ function buildBaseConfig(featureFlags) {
         },
       ],
       "react/react-in-jsx-scope": "off",
+    });
+  }
+
+  if (hasJsxA11y) {
+    Object.assign(rules, {
       "jsx-a11y/label-has-associated-control": [
         "error",
         {

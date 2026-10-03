@@ -8,8 +8,10 @@ export type ModuleBoundaries = {
 };
 
 export type Features = {
-  /** React + jsx-a11y plugins/rules and Playwright hooks exemptions. Default: auto-detect `react`. */
+  /** React plugin/rules and Playwright hooks exemptions. Default: auto-detect `react`. */
   react?: boolean;
+  /** JSX accessibility plugin/rules. Default: follows the resolved `react` feature. */
+  jsxA11y?: boolean;
   /** Vitest plugin + focused-test warning on test globs. Default: auto-detect `vitest`. */
   vitest?: boolean;
   /** `env.astro` + `no-undef` on Astro files (frontmatter/script only). Default: auto-detect `astro`. */

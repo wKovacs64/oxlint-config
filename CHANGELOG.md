@@ -1,5 +1,11 @@
 # @wkovacs64/oxlint-config
 
+## 0.3.0
+
+### Minor Changes
+
+- [#24](https://github.com/wKovacs64/oxlint-config/pull/24) [`9e871dc`](https://github.com/wKovacs64/oxlint-config/commit/9e871dc09dcb5a898af2d05c7d8116feb240f354) Thanks [@wKovacs64](https://github.com/wKovacs64)! - Add a `jsxA11y` feature option to enable or disable shared JSX accessibility checks independently of React. Accessibility continues to follow the React feature by default.
+
 ## 0.2.2
 
 ### Patch Changes

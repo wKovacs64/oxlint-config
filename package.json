@@ -56,7 +56,7 @@
     "@changesets/cli": "3.0.3",
     "@types/react": "19.3.0",
     "@wkovacs64/oxfmt-config": "1.0.0",
-    "oxfmt": "0.71.0",
+    "oxfmt": "0.72.0",
     "oxlint": "1.86.0",
     "oxlint-tsgolint": "7.0.2003",
     "react": "19.3.0",

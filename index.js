@@ -13,6 +13,7 @@ const sourceExtensions = ["js", "jsx", "cjs", "mjs", "ts", "tsx", "cts", "mts"];
 const moduleBoundariesPlugin = fileURLToPath(
   new URL("./plugins/module-boundaries.js", import.meta.url),
 );
+const typographyPlugin = fileURLToPath(new URL("./plugins/typography.js", import.meta.url));
 /**
  * @param {string} pkgName
  */
@@ -244,6 +245,7 @@ function buildBaseConfig(featureFlags) {
   /** @type {Record<string, unknown>} */
   const rules = {
     "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+    "typography/no-typographic-quotes": "error",
 
     "import/no-duplicates": ["warn", { preferInline: true }],
     "import/no-unassigned-import": "off",
@@ -396,7 +398,7 @@ function buildBaseConfig(featureFlags) {
   return defineConfig({
     // Setting `plugins` replaces defaults — include the full desired set.
     plugins,
-    jsPlugins: moduleBoundaries?.jsPlugins,
+    jsPlugins: [typographyPlugin, ...(moduleBoundaries?.jsPlugins ?? [])],
     options: {
       // Requires peer `oxlint-tsgolint`. Consumers may set `typeAware: false` to opt out.
       typeAware: true,

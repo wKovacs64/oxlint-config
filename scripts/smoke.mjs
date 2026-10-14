@@ -312,8 +312,12 @@ runJson(fixture("astro-global-bad.astro"), {
 const isolatedRoot = mkdtempSync(path.join(tmpdir(), "oxlint-config-no-vitest-"));
 try {
   const isolatedPackage = path.join(isolatedRoot, "node_modules", "@wkovacs64", "oxlint-config");
-  mkdirSync(isolatedPackage, { recursive: true });
+  mkdirSync(path.join(isolatedPackage, "plugins"), { recursive: true });
   copyFileSync(path.join(root, "index.js"), path.join(isolatedPackage, "index.js"));
+  copyFileSync(
+    path.join(root, "plugins/typography.js"),
+    path.join(isolatedPackage, "plugins/typography.js"),
+  );
   writeFileSync(
     path.join(isolatedPackage, "package.json"),
     JSON.stringify({ name: "@wkovacs64/oxlint-config", type: "module", exports: "./index.js" }),
@@ -388,6 +392,10 @@ try {
   copyFileSync(
     path.join(root, "plugins/module-boundaries.js"),
     path.join(isolatedPackage, "plugins/module-boundaries.js"),
+  );
+  copyFileSync(
+    path.join(root, "plugins/typography.js"),
+    path.join(isolatedPackage, "plugins/typography.js"),
   );
   copyFileSync(path.join(root, "package.json"), path.join(isolatedPackage, "package.json"));
   symlinkSync(

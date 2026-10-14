@@ -164,6 +164,10 @@ settings and rules are merged with consumer values taking precedence.
 - `createConfig` combines consumer plugins with the shared plugin set.
 - `no-unused-vars` explicitly allows unused arguments prefixed with `_`, including bare `_`. Other
   options remain at their defaults.
+- `typography/no-typographic-quotes` rejects U+2018, U+2019, U+201C, and U+201D in string literals,
+  JSX text, and raw template text. Comments are excluded. Inspired by
+  [`@slhs/eslint-config`](https://www.npmjs.com/package/@slhs/eslint-config), implemented with
+  [Oxlint's JS plugin API](https://oxc.rs/docs/guide/usage/linter/js-plugins.html).
 - Import **ordering** is not configured (no native `import/order`); use a formatter if you care.
 - **Astro:** Oxlint lints frontmatter + `<script>` only — no template/`client:*` rules (see
   [compatibility](https://oxc.rs/compatibility.html)).

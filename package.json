@@ -25,7 +25,8 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "plugins/module-boundaries.js"
+    "plugins/module-boundaries.js",
+    "plugins/typography.js"
   ],
   "type": "module",
   "main": "index.js",

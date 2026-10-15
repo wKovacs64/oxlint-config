@@ -1,5 +1,11 @@
 # @wkovacs64/oxlint-config
 
+## 0.4.0
+
+### Minor Changes
+
+- [#26](https://github.com/wKovacs64/oxlint-config/pull/26) [`1544783`](https://github.com/wKovacs64/oxlint-config/commit/154478326fce212152ecc5336bbed89a6c83b078) Thanks [@wKovacs64](https://github.com/wKovacs64)! - Reject typographic quotes in string literals, JSX text, and template text by default. Comments are excluded.
+
 ## 0.3.0
 
 ### Minor Changes

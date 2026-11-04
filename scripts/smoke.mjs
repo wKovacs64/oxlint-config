@@ -47,63 +47,75 @@ assert.equal(mergedConfig.overrides.at(-1).files[0], "**/*.custom.ts");
 console.log("ok createConfig merges consumer config");
 
 // Feature flags (explicit beats auto-detect)
-const noReact = createConfig({}, { react: false, vitest: false, astro: false });
+const noReact = createConfig({}, { react: false, remix: false, vitest: false, astro: false });
 assert.ok(!noReact.plugins.includes("react"));
 assert.ok(!noReact.plugins.includes("jsx-a11y"));
 assert.ok(!noReact.plugins.includes("vitest"));
-assert.equal(noReact.rules["react/rules-of-hooks"], undefined);
-assert.ok(!Object.keys(noReact.rules).some((name) => name.startsWith("jsx-a11y/")));
-assert.ok(!noReact.overrides.some((o) => o.env?.vitest));
-assert.ok(!noReact.overrides.some((o) => o.env?.astro));
-assert.ok(!noReact.overrides.some((o) => o.files?.includes?.("**/playwright/**")));
-console.log("ok features all-off strips react/vitest/astro");
-
-const nonReactJsx = createConfig({}, { react: false, jsxA11y: true, vitest: false, astro: false });
-assert.ok(nonReactJsx.plugins.includes("jsx-a11y"));
-assert.ok(!nonReactJsx.plugins.includes("react"));
-assert.deepEqual(nonReactJsx.rules["jsx-a11y/label-has-associated-control"], [
-  "error",
-  { assert: "either" },
-]);
-assert.equal(nonReactJsx.rules["jsx-a11y/prefer-tag-over-role"], "off");
-assert.ok(!Object.keys(nonReactJsx.rules).some((name) => name.startsWith("react/")));
 assert.ok(
-  !nonReactJsx.overrides.some((o) =>
-    Object.keys(o.rules ?? {}).some((name) => name.startsWith("react/")),
-  ),
-);
-console.log("ok non-React JSX enables shared accessibility without React rules");
-
-const noA11y = createConfig({}, { react: true, jsxA11y: false, vitest: false, astro: false });
-assert.ok(noA11y.plugins.includes("react"));
-assert.ok(!noA11y.plugins.includes("jsx-a11y"));
-assert.equal(noA11y.rules["react/rules-of-hooks"], "error");
-assert.ok(!Object.keys(noA11y.rules).some((name) => name.startsWith("jsx-a11y/")));
-assert.ok(noA11y.overrides.some((o) => o.rules?.["react/rules-of-hooks"] === "off"));
-const bothOff = createConfig({}, { react: false, jsxA11y: false });
-assert.ok(!bothOff.plugins.includes("react"));
-assert.ok(!bothOff.plugins.includes("jsx-a11y"));
-assert.ok(
-  !Object.keys(bothOff.rules).some(
+  !Object.keys(noReact.rules).some(
     (name) => name.startsWith("react/") || name.startsWith("jsx-a11y/"),
   ),
 );
-const detectedNoA11y = createConfig({}, { jsxA11y: false });
-assert.equal(detectedNoA11y.plugins.includes("react"), canResolve("react"));
-assert.ok(!detectedNoA11y.plugins.includes("jsx-a11y"));
-console.log("ok explicit accessibility disable preserves React and its Playwright exemptions");
+assert.ok(!noReact.overrides.some((o) => o.env?.vitest));
+assert.ok(!noReact.overrides.some((o) => o.env?.astro));
+assert.ok(!noReact.overrides.some((o) => o.files?.includes?.("**/playwright/**")));
+assert.deepEqual(noReact.rules["typescript/no-floating-promises"], [
+  "error",
+  {
+    ignoreIIFE: true,
+    allowForKnownSafeCalls: [{ from: "package", package: "@remix-run/component", name: "update" }],
+  },
+]);
+console.log("ok features all-off strips react/remix/vitest/astro");
 
-const allOn = createConfig({}, { react: true, vitest: true, astro: true });
+const jsxRules = {
+  "react/jsx-key": "error",
+  "react/jsx-no-duplicate-props": "error",
+  "react/jsx-no-undef": "error",
+  "react/jsx-props-no-spread-multi": "error",
+  "react/void-dom-elements-no-children": "error",
+  "react/iframe-missing-sandbox": "warn",
+  "react/jsx-no-comment-textnodes": "warn",
+  "react/jsx-no-script-url": "warn",
+};
+const remixOnly = createConfig({}, { react: false, remix: true, vitest: false, astro: false });
+assert.ok(remixOnly.plugins.includes("react"));
+assert.ok(remixOnly.plugins.includes("jsx-a11y"));
+assert.equal(remixOnly.rules["react/rules-of-hooks"], "off");
+assert.equal(remixOnly.rules["react/display-name"], "off");
+assert.equal(remixOnly.rules["react/no-unknown-property"], "off");
+assert.deepEqual(
+  Object.fromEntries(
+    Object.entries(remixOnly.rules).filter(
+      ([name, severity]) => name.startsWith("react/") && severity !== "off",
+    ),
+  ),
+  jsxRules,
+);
+assert.deepEqual(remixOnly.rules["jsx-a11y/label-has-associated-control"], [
+  "error",
+  { assert: "either" },
+]);
+assert.equal(remixOnly.rules["jsx-a11y/prefer-tag-over-role"], "off");
+assert.ok(
+  !remixOnly.overrides.some((o) =>
+    Object.keys(o.rules ?? {}).some((name) => name.startsWith("react/")),
+  ),
+);
+console.log("ok remix enables JSX and accessibility rules without React-only rules");
+
+const allOn = createConfig({}, { react: true, remix: false, vitest: true, astro: true });
 assert.ok(allOn.plugins.includes("react"));
 assert.ok(allOn.plugins.includes("jsx-a11y"));
 assert.ok(allOn.plugins.includes("vitest"));
 assert.equal(allOn.rules["react/rules-of-hooks"], "error");
+assert.ok(Object.entries(jsxRules).every(([name, severity]) => allOn.rules[name] === severity));
 assert.deepEqual(allOn.rules["jsx-a11y/label-has-associated-control"], [
   "error",
   { assert: "either" },
 ]);
 assert.equal(allOn.rules["jsx-a11y/prefer-tag-over-role"], "off");
-const bothOn = createConfig({}, { react: true, jsxA11y: true, vitest: true, astro: true });
+const bothOn = createConfig({}, { react: true, remix: true, vitest: true, astro: true });
 assert.deepEqual(bothOn, allOn);
 const reactCompilerRuleNames = [
   "capitalized-calls",
@@ -179,7 +191,10 @@ vitestOverride.files[0] = "**/mutated-tests/**";
 vitestOverride.excludeFiles[0] = "**/mutated-playwright/**";
 playwrightVitestOff.files[0] = "**/mutated-playwright/**";
 playwrightVitestOff.rules["vitest/expect-expect"] = "error";
-const independentConfig = createConfig({}, { react: true, vitest: true, astro: true });
+const independentConfig = createConfig(
+  {},
+  { react: true, remix: false, vitest: true, astro: true },
+);
 const independentVitestOverride = independentConfig.overrides.find((o) => o.env?.vitest);
 const independentPlaywrightVitestOff = independentConfig.overrides.find(
   (o) =>
@@ -195,8 +210,10 @@ console.log("ok createConfig results own playwright vitest override graphs");
 
 // Auto-detect matches package tree resolution from this module
 const detected = createConfig();
-assert.equal(detected.plugins.includes("react"), canResolve("react"));
-assert.equal(detected.plugins.includes("jsx-a11y"), canResolve("react"));
+const detectedJsx = canResolve("react") || canResolve("remix/component");
+assert.equal(detected.plugins.includes("react"), detectedJsx);
+assert.equal(detected.plugins.includes("jsx-a11y"), detectedJsx);
+assert.equal(detected.rules["react/rules-of-hooks"] === "error", canResolve("react"));
 assert.equal(detected.plugins.includes("vitest"), canResolve("vitest"));
 assert.equal(
   detected.overrides.some(
@@ -302,6 +319,17 @@ runJson(fixture("void-expression-bad.ts"), {
   expected: error("typescript(no-confusing-void-expression)"),
 });
 
+const remixConfig = path.join(root, "fixtures/config-remix.ts");
+runJson(fixture("remix/component-ok.tsx"), { configPath: remixConfig });
+runJson(fixture("remix/jsx-key-bad.tsx"), {
+  configPath: remixConfig,
+  expected: error("react(jsx-key)"),
+});
+runJson(fixture("remix/alt-text-bad.tsx"), {
+  configPath: remixConfig,
+  expected: error("jsx-a11y(alt-text)"),
+});
+
 const astroConfig = path.join(root, "fixtures/config-astro.ts");
 runJson(fixture("astro-global-ok.astro"), { configPath: astroConfig });
 runJson(fixture("astro-global-bad.astro"), {
@@ -355,30 +383,22 @@ try {
   copyFileSync(fixture("role-required-bad.tsx"), isolatedJsxProbe);
   runJson(isolatedJsxProbe, {
     configPath: isolatedConfigPath,
-    label: "isolated JSX without React defaults to no accessibility",
+    label: "isolated JSX without React or Remix defaults to no accessibility",
   });
   writeFileSync(
     isolatedConfigPath,
-    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig({}, { jsxA11y: true });\n',
+    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig({}, { remix: true });\n',
   );
   runJson(isolatedJsxProbe, {
     configPath: isolatedConfigPath,
     expected: error("jsx-a11y(role-has-required-aria-props)"),
-    label: "isolated JSX without React opts into accessibility",
+    label: "isolated JSX without React opts into Remix",
   });
   const isolatedJsxOk = path.join(isolatedRoot, "role-img-ok.tsx");
   copyFileSync(fixture("role-img-ok.tsx"), isolatedJsxOk);
   runJson(isolatedJsxOk, {
     configPath: isolatedConfigPath,
     label: "isolated JSX without React accepts accessible markup",
-  });
-  writeFileSync(
-    isolatedConfigPath,
-    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig({}, { react: true, jsxA11y: false });\n',
-  );
-  runJson(isolatedJsxProbe, {
-    configPath: isolatedConfigPath,
-    label: "React with accessibility explicitly disabled",
   });
 } finally {
   rmSync(isolatedRoot, { recursive: true, force: true });

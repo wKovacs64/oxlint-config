@@ -3,7 +3,8 @@
 Personal [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) config.
 
 **Type-aware** linting via `oxlint-tsgolint`, Oxlint defaults, high-signal rule tweaks, and
-**optional** React / Vitest / Astro layers auto-detected from the package tree (overridable).
+**optional** React / Remix / Vitest / Astro layers auto-detected from the package tree
+(overridable).
 
 [![npm Version](https://img.shields.io/npm/v/@wkovacs64/oxlint-config.svg?style=for-the-badge)](https://www.npmjs.com/package/@wkovacs64/oxlint-config)
 [![Build Status](https://img.shields.io/badge/CI-GitHub%20Actions-success?logo=github&style=for-the-badge)](https://github.com/wKovacs64/oxlint-config/actions?query=workflow%3Aci)
@@ -46,7 +47,8 @@ config) and enables matching layers:
 
 | Package  | Enables                                                                                                                   |
 | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `react`  | `react` + `jsx-a11y` plugins/rules; Playwright path hooks exemptions                                                      |
+| `react`  | `react` + `jsx-a11y` plugins/rules; all `react/*` off under `**/playwright/**`                                            |
+| `remix`  | JSX + `jsx-a11y` rules without React-only rules (via `remix/component`)                                                   |
 | `vitest` | plugin + `env.vitest` / strict rules on test globs (`no-focused-tests` warn); all `vitest/*` off under `**/playwright/**` |
 | `astro`  | `env.astro` + `no-undef` on `**/*.astro` (frontmatter + `<script>` only)                                                  |
 
@@ -59,17 +61,24 @@ export default createConfig(
   {},
   {
     react: false,
-    jsxA11y: true,
+    remix: true,
     vitest: true,
     astro: true,
   },
 );
 ```
 
-`jsxA11y` controls the `jsx-a11y` plugin and shared accessibility rules independently of React. It
-defaults to the resolved `react` feature, preserving existing React defaults. Set `jsxA11y: true`
-for non-React JSX projects, or `jsxA11y: false` to disable accessibility checks while keeping React
-enabled. No additional framework detection is performed.
+`remix` is for Remix 3 apps, which render JSX through `remix/component` instead of React. It enables
+the `react` plugin with every `react/*` rule off except the JSX checks that apply to any JSX
+rendering HTML (`jsx-key`, `jsx-no-duplicate-props`, `jsx-no-undef`, `jsx-props-no-spread-multi`,
+`void-dom-elements-no-children`, `iframe-missing-sandbox`, `jsx-no-comment-textnodes`,
+`jsx-no-script-url`), plus the `jsx-a11y` plugin and shared rules. React-only rules such as hooks,
+React Compiler, `no-unknown-property`, and `display-name` stay off: Remix uses `class`, `mix`, and
+`innerHTML`, and its components are setup functions returning render functions. With both `react`
+and `remix`, the React layer applies.
+
+`typescript/no-floating-promises` allows Remix's `handle.update()` without `await` or `void`
+([Remix docs](https://docs.remix.run/rendering-ui/) call it that way in event handlers).
 
 ### Module boundaries
 

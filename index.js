@@ -27,36 +27,57 @@ function has(pkgName) {
 }
 
 /** @type {string[] | undefined} */
-let cachedVitestRuleKeys;
+let cachedRuleKeys;
 
 /**
- * Every native `vitest/*` rule key from the installed oxlint schema.
- * Category-enabled Vitest rules activate globally with the plugin; Playwright
- * paths need an explicit off list (override `excludeFiles` only drops env/severity).
+ * Every native rule key for `plugin` from the installed oxlint schema.
+ * Category-enabled rules activate globally with their plugin, and an override
+ * can't drop a plugin, so turning a plugin off somewhere needs an explicit off list.
+ * @param {string} plugin
  * @returns {Record<string, "off">}
  */
-function vitestRuleOffs() {
-  if (!cachedVitestRuleKeys) {
+function ruleOffs(plugin) {
+  if (!cachedRuleKeys) {
     const oxlintPkg = fileURLToPath(import.meta.resolve("oxlint/package.json"));
-    const schema = readFileSync(join(dirname(oxlintPkg), "configuration_schema.json"), "utf8");
-    cachedVitestRuleKeys = [
-      ...new Set([...schema.matchAll(/"(vitest\/[^"]+)"/g)].map((match) => match[1])),
-    ];
-    if (cachedVitestRuleKeys.length === 0) {
-      throw new Error("oxlint configuration_schema.json: no vitest/* rules found");
-    }
+    const schema = JSON.parse(
+      readFileSync(join(dirname(oxlintPkg), "configuration_schema.json"), "utf8"),
+    );
+    cachedRuleKeys = Object.keys(schema.definitions.DummyRuleMap.properties);
   }
-  /** @type {Record<string, "off">} */
-  const offs = {};
-  for (const key of cachedVitestRuleKeys) {
-    offs[key] = "off";
+  const keys = cachedRuleKeys.filter((key) => key.startsWith(`${plugin}/`));
+  if (keys.length === 0) {
+    throw new Error(`oxlint configuration_schema.json: no ${plugin}/* rules found`);
   }
-  return offs;
+  return Object.fromEntries(keys.map((key) => [key, "off"]));
 }
 
 /**
+ * `react` plugin checks that apply to any JSX rendering HTML, at their category severity.
+ */
+const jsxRules = {
+  "react/jsx-key": "error",
+  "react/jsx-no-duplicate-props": "error",
+  "react/jsx-no-undef": "error",
+  "react/jsx-props-no-spread-multi": "error",
+  "react/void-dom-elements-no-children": "error",
+  "react/iframe-missing-sandbox": "warn",
+  "react/jsx-no-comment-textnodes": "warn",
+  "react/jsx-no-script-url": "warn",
+};
+
+const jsxA11yRules = {
+  "jsx-a11y/label-has-associated-control": [
+    "error",
+    {
+      assert: "either",
+    },
+  ],
+  "jsx-a11y/prefer-tag-over-role": "off",
+};
+
+/**
  * @typedef {{ modulesPath: string }} ModuleBoundaries
- * @typedef {{ react?: boolean, jsxA11y?: boolean, vitest?: boolean, astro?: boolean, moduleBoundaries?: ModuleBoundaries }} Features
+ * @typedef {{ react?: boolean, remix?: boolean, vitest?: boolean, astro?: boolean, moduleBoundaries?: ModuleBoundaries }} Features
  */
 
 function escapeGlob(value) {
@@ -206,10 +227,10 @@ function buildModuleBoundaries(options) {
  * @param {Features} [features]
  */
 function resolveFeatures(features = {}) {
-  const react = features.react ?? has("react");
   return {
-    react,
-    jsxA11y: features.jsxA11y ?? react,
+    react: features.react ?? has("react"),
+    // `remix` exports types only from its root; its JSX runtime lives at `remix/component`.
+    remix: features.remix ?? has("remix/component"),
     vitest: features.vitest ?? has("vitest"),
     astro: features.astro ?? has("astro"),
   };
@@ -221,7 +242,7 @@ function resolveFeatures(features = {}) {
 function buildBaseConfig(featureFlags) {
   const {
     react: hasReact,
-    jsxA11y: hasJsxA11y,
+    remix: hasRemix,
     vitest: hasVitest,
     astro: hasAstro,
   } = resolveFeatures(featureFlags);
@@ -232,11 +253,9 @@ function buildBaseConfig(featureFlags) {
 
   /** @type {string[]} */
   const plugins = ["eslint", "typescript", "unicorn", "oxc", "import"];
-  if (hasReact) {
-    plugins.push("react");
-  }
-  if (hasJsxA11y) {
-    plugins.push("jsx-a11y");
+  const hasJsx = hasReact || hasRemix;
+  if (hasJsx) {
+    plugins.push("react", "jsx-a11y");
   }
   if (hasVitest) {
     plugins.push("vitest");
@@ -259,7 +278,16 @@ function buildBaseConfig(featureFlags) {
       },
     ],
     "typescript/no-import-type-side-effects": "error",
-    "typescript/no-floating-promises": ["error", { ignoreIIFE: true }],
+    "typescript/no-floating-promises": [
+      "error",
+      {
+        ignoreIIFE: true,
+        // Remix `handle.update()` is called without awaiting in event handlers.
+        allowForKnownSafeCalls: [
+          { from: "package", package: "@remix-run/component", name: "update" },
+        ],
+      },
+    ],
     "typescript/no-confusing-void-expression": ["error", { ignoreArrowShorthand: true }],
     "typescript/no-explicit-any": "off",
     "typescript/no-non-null-assertion": "off",
@@ -267,6 +295,15 @@ function buildBaseConfig(featureFlags) {
     "typescript/ban-ts-comment": "off",
     "typescript/consistent-type-definitions": "off",
   };
+
+  if (hasRemix && !hasReact) {
+    // Categories would turn on hooks, React Compiler, and component rules.
+    Object.assign(rules, ruleOffs("react"));
+  }
+
+  if (hasJsx) {
+    Object.assign(rules, jsxRules, jsxA11yRules);
+  }
 
   if (hasReact) {
     Object.assign(rules, {
@@ -305,18 +342,6 @@ function buildBaseConfig(featureFlags) {
     });
   }
 
-  if (hasJsxA11y) {
-    Object.assign(rules, {
-      "jsx-a11y/label-has-associated-control": [
-        "error",
-        {
-          assert: "either",
-        },
-      ],
-      "jsx-a11y/prefer-tag-over-role": "off",
-    });
-  }
-
   /** @type {import("oxlint").OxlintConfig["overrides"]} */
   const overrides = [
     {
@@ -344,7 +369,7 @@ function buildBaseConfig(featureFlags) {
     // off under Playwright paths (excludeFiles on the Vitest override is not enough).
     overrides.push({
       files: [...playwrightGlobs],
-      rules: vitestRuleOffs(),
+      rules: ruleOffs("vitest"),
     });
   }
 
@@ -352,32 +377,7 @@ function buildBaseConfig(featureFlags) {
     overrides.push({
       // Playwright specs aren't React components/hooks consumers
       files: [...playwrightGlobs],
-      rules: {
-        "react/rules-of-hooks": "off",
-        "react/exhaustive-deps": "off",
-        "react/capitalized-calls": "off",
-        "react/error-boundaries": "off",
-        "react/exhaustive-effect-dependencies": "off",
-        "react/globals": "off",
-        "react/hooks": "off",
-        "react/immutability": "off",
-        "react/incompatible-library": "off",
-        "react/invariant": "off",
-        "react/memo-dependencies": "off",
-        "react/no-deriving-state-in-effects": "off",
-        "react/preserve-manual-memoization": "off",
-        "react/purity": "off",
-        "react/refs": "off",
-        "react/rule-suppression": "off",
-        "react/set-state-in-effect": "off",
-        "react/set-state-in-render": "off",
-        "react/static-components": "off",
-        "react/syntax": "off",
-        "react/todo": "off",
-        "react/unsupported-syntax": "off",
-        "react/use-memo": "off",
-        "react/void-use-memo": "off",
-      },
+      rules: ruleOffs("react"),
     });
   }
 

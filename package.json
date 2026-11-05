@@ -25,8 +25,7 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "plugins/module-boundaries.js",
-    "plugins/typography.js"
+    "plugins"
   ],
   "type": "module",
   "main": "index.js",
@@ -52,9 +51,15 @@
     "test": "node ./scripts/smoke.mjs",
     "typecheck": "tsc"
   },
+  "dependencies": {
+    "@oxlint/plugins": "^1.90.0",
+    "eslint-plugin-playwright": "^2.12.1"
+  },
   "devDependencies": {
     "@changesets/changelog-github": "1.0.1",
     "@changesets/cli": "3.0.3",
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@wkovacs64/oxfmt-config": "1.0.0",
     "oxfmt": "0.75.0",

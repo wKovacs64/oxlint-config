@@ -1,19 +1,32 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { createConfig } from "../index.js";
+import { isRecord, isString } from "../plugins/guards.js";
+
+/** @import { OxlintOverride } from "oxlint" */
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const config = path.join(root, "fixtures/config.ts");
 const oxlintBin = path.join(root, "node_modules/.bin/oxlint");
 const { default: mergedConfig } = await import("../fixtures/config.ts");
 
+/** @param {string} pkg */
 function canResolve(pkg) {
   try {
     import.meta.resolve(pkg, import.meta.url);
+
     return true;
   } catch {
     return false;
@@ -24,49 +37,114 @@ const packResult = spawnSync("pnpm", ["pack", "--dry-run", "--json"], {
   cwd: root,
   encoding: "utf8",
 });
+
 assert.equal(packResult.status, 0, packResult.stderr);
-const packFiles = JSON.parse(packResult.stdout).files.map(({ path: filename }) => filename);
-assert.ok(packFiles.includes("plugins/module-boundaries.js"));
-console.log("ok package includes module-boundaries plugin");
+
+/** @type {unknown} */
+const packOutput = JSON.parse(packResult.stdout);
+
+assert.ok(
+  isRecord(packOutput) && Array.isArray(packOutput.files),
+  "pnpm pack --json output has files",
+);
+
+const packFiles = packOutput.files.map((file) => (isRecord(file) ? file.path : undefined));
+
+for (const file of [
+  "plugins/module-boundaries.js",
+  "plugins/conventions.js",
+  "plugins/guards.js",
+  "plugins/anti-slop/index.js",
+  "plugins/anti-slop/LICENSE",
+]) {
+  assert.ok(packFiles.includes(file), `package includes ${file}`);
+}
+
+console.log("ok package includes plugins");
 
 assert.deepEqual(mergedConfig.env, {
   browser: false,
   node: true,
   serviceworker: true,
 });
+
 assert.equal(mergedConfig.ignorePatterns.at(-1), "generated/**");
+
 assert.equal(mergedConfig.options.typeAware, true);
+
 assert.equal(mergedConfig.options.denyWarnings, true);
+
 assert.equal(new Set(mergedConfig.plugins).size, mergedConfig.plugins.length);
+
 assert.ok(mergedConfig.plugins.includes("vitest"));
+
 assert.ok(mergedConfig.plugins.includes("react"));
+
 assert.ok(mergedConfig.plugins.includes("jsx-a11y"));
+
 assert.deepEqual(mergedConfig.settings.custom, { enabled: true });
+
 assert.equal(mergedConfig.rules["no-debugger"], "warn");
-assert.equal(mergedConfig.overrides.at(-1).files[0], "**/*.custom.ts");
+
+assert.equal(mergedConfig.overrides.at(-1)?.files[0], "**/*.custom.ts");
+
 console.log("ok createConfig merges consumer config");
 
 // Feature flags (explicit beats auto-detect)
-const noReact = createConfig({}, { react: false, remix: false, vitest: false, astro: false });
+const allOff = { react: false, remix: false, vitest: false, playwright: false, astro: false };
+
+/**
+ * @param {OxlintOverride | undefined} override
+ */
+function overrideRules(override) {
+  assert.ok(override?.rules, "override has rules");
+
+  return override.rules;
+}
+
+/**
+ * @param {OxlintOverride[]} overrides
+ */
+function playwrightOverride(overrides) {
+  return overrides.find((o) => o.files.length === 1 && o.files[0] === "**/playwright/**");
+}
+
+const noReact = createConfig({}, allOff);
+
 assert.ok(!noReact.plugins.includes("react"));
+
 assert.ok(!noReact.plugins.includes("jsx-a11y"));
+
 assert.ok(!noReact.plugins.includes("vitest"));
+
 assert.ok(
   !Object.keys(noReact.rules).some(
     (name) => name.startsWith("react/") || name.startsWith("jsx-a11y/"),
   ),
 );
-assert.ok(!noReact.overrides.some((o) => o.env?.vitest));
-assert.ok(!noReact.overrides.some((o) => o.env?.astro));
-assert.ok(!noReact.overrides.some((o) => o.files?.includes?.("**/playwright/**")));
-assert.deepEqual(noReact.rules["typescript/no-floating-promises"], [
-  "error",
-  {
-    ignoreIIFE: true,
-    allowForKnownSafeCalls: [{ from: "package", package: "@remix-run/component", name: "update" }],
-  },
-]);
-console.log("ok features all-off strips react/remix/vitest/astro");
+
+assert.ok(!noReact.overrides.some((o) => o.env?.vitest === true));
+
+assert.ok(!noReact.overrides.some((o) => o.env?.astro === true));
+
+assert.equal(playwrightOverride(noReact.overrides), undefined);
+
+assert.ok(!noReact.jsPlugins.some((plugin) => isRecord(plugin) && plugin.name === "playwright"));
+
+assert.equal(noReact.categories.suspicious, "error");
+
+assert.equal(noReact.options.reportUnusedDisableDirectives, "error");
+
+assert.ok(
+  Object.values(noReact.rules).every((rule) => {
+    const severity = Array.isArray(rule) ? rule[0] : rule;
+
+    return severity === "error" || severity === "off";
+  }),
+  "every configured rule is an error or off",
+);
+
+console.log("ok features all-off strips react/remix/vitest/playwright/astro");
 
 const jsxRules = {
   "react/jsx-key": "error",
@@ -74,16 +152,25 @@ const jsxRules = {
   "react/jsx-no-undef": "error",
   "react/jsx-props-no-spread-multi": "error",
   "react/void-dom-elements-no-children": "error",
-  "react/iframe-missing-sandbox": "warn",
-  "react/jsx-no-comment-textnodes": "warn",
-  "react/jsx-no-script-url": "warn",
+  "react/iframe-missing-sandbox": "error",
+  "react/jsx-no-comment-textnodes": "error",
+  "react/jsx-no-script-url": "error",
+  "react/no-unescaped-entities": "error",
+  "react/jsx-no-target-blank": "error",
 };
-const remixOnly = createConfig({}, { react: false, remix: true, vitest: false, astro: false });
+
+const remixOnly = createConfig({}, { ...allOff, remix: true });
+
 assert.ok(remixOnly.plugins.includes("react"));
+
 assert.ok(remixOnly.plugins.includes("jsx-a11y"));
+
 assert.equal(remixOnly.rules["react/rules-of-hooks"], "off");
+
 assert.equal(remixOnly.rules["react/display-name"], "off");
+
 assert.equal(remixOnly.rules["react/no-unknown-property"], "off");
+
 assert.deepEqual(
   Object.fromEntries(
     Object.entries(remixOnly.rules).filter(
@@ -92,138 +179,143 @@ assert.deepEqual(
   ),
   jsxRules,
 );
+
 assert.deepEqual(remixOnly.rules["jsx-a11y/label-has-associated-control"], [
   "error",
   { assert: "either" },
 ]);
+
 assert.equal(remixOnly.rules["jsx-a11y/prefer-tag-over-role"], "off");
+
 assert.ok(
   !remixOnly.overrides.some((o) =>
     Object.keys(o.rules ?? {}).some((name) => name.startsWith("react/")),
   ),
 );
+
 console.log("ok remix enables JSX and accessibility rules without React-only rules");
 
-const allOn = createConfig({}, { react: true, remix: false, vitest: true, astro: true });
+const allOnFeatures = { react: true, remix: false, vitest: true, playwright: true, astro: true };
+const allOn = createConfig({}, allOnFeatures);
+
 assert.ok(allOn.plugins.includes("react"));
+
 assert.ok(allOn.plugins.includes("jsx-a11y"));
+
 assert.ok(allOn.plugins.includes("vitest"));
+
 assert.equal(allOn.rules["react/rules-of-hooks"], "error");
+
+assert.equal(allOn.rules["react/hooks"], "off");
+
 assert.ok(Object.entries(jsxRules).every(([name, severity]) => allOn.rules[name] === severity));
+
 assert.deepEqual(allOn.rules["jsx-a11y/label-has-associated-control"], [
   "error",
   { assert: "either" },
 ]);
+
 assert.equal(allOn.rules["jsx-a11y/prefer-tag-over-role"], "off");
-const bothOn = createConfig({}, { react: true, remix: true, vitest: true, astro: true });
-assert.deepEqual(bothOn, allOn);
+
+assert.deepEqual(createConfig({}, { ...allOnFeatures, remix: true }), allOn);
+
 const reactCompilerRuleNames = [
   "capitalized-calls",
-  "error-boundaries",
   "exhaustive-effect-dependencies",
-  "globals",
-  "hooks",
-  "immutability",
-  "incompatible-library",
   "invariant",
   "memo-dependencies",
   "no-deriving-state-in-effects",
-  "preserve-manual-memoization",
-  "purity",
-  "refs",
   "rule-suppression",
-  "set-state-in-effect",
-  "set-state-in-render",
-  "static-components",
   "syntax",
   "todo",
   "unsupported-syntax",
-  "use-memo",
-  "void-use-memo",
 ];
+
 assert.ok(reactCompilerRuleNames.every((name) => allOn.rules[`react/${name}`] === "error"));
-assert.ok(allOn.overrides.some((o) => o.env?.vitest));
+
+assert.ok(allOn.overrides.some((o) => o.env?.vitest === true));
+
+assert.ok(allOn.overrides.some((o) => o.files.includes("**/*.astro") && o.env?.astro === true));
+
+const playwrightOffs = overrideRules(playwrightOverride(allOn.overrides));
+
+assert.equal(playwrightOffs["no-empty-pattern"], "off");
+
 assert.ok(
-  allOn.overrides.some(
-    (o) => Array.isArray(o.files) && o.files.includes("**/*.astro") && o.env?.astro === true,
+  ["rules-of-hooks", "hooks", ...reactCompilerRuleNames].every(
+    (name) => playwrightOffs[`react/${name}`] === "off",
   ),
-);
-const playwrightReactOff = allOn.overrides.find(
-  (o) => o.files?.includes?.("**/playwright/**") && o.rules?.["react/rules-of-hooks"] === "off",
-);
-assert.ok(playwrightReactOff);
-assert.ok(
-  reactCompilerRuleNames.every((name) => playwrightReactOff.rules[`react/${name}`] === "off"),
+  "every playwright react/* rule must be disabled",
 );
 
-const vitestOverride = allOn.overrides.find((o) => o.env?.vitest);
-assert.ok(vitestOverride);
-assert.deepEqual(vitestOverride.excludeFiles, ["**/playwright/**/*.spec.*"]);
-assert.equal(vitestOverride.rules["vitest/no-focused-tests"], "warn");
+const vitestOffEntries = Object.entries(playwrightOffs).filter(([k]) => k.startsWith("vitest/"));
 
-const playwrightVitestOff = allOn.overrides.find(
-  (o) =>
-    Array.isArray(o.files) &&
-    o.files.includes("**/playwright/**") &&
-    o.rules &&
-    Object.keys(o.rules).some((k) => k.startsWith("vitest/")),
-);
-assert.ok(playwrightVitestOff, "playwright override must disable vitest/* rules");
-const vitestOffEntries = Object.entries(playwrightVitestOff.rules).filter(([k]) =>
-  k.startsWith("vitest/"),
-);
 assert.ok(vitestOffEntries.length > 0);
+
 assert.ok(
   vitestOffEntries.every(([, severity]) => severity === "off"),
   "every playwright vitest/* rule must be disabled",
 );
-assert.ok(
-  vitestOffEntries.some(([k]) => k === "vitest/expect-expect"),
-  "category-enabled vitest/expect-expect must be disabled on playwright paths",
-);
-assert.ok(
-  vitestOffEntries.some(([k]) => k === "vitest/no-focused-tests"),
-  "category-enabled vitest/no-focused-tests must be disabled on playwright paths",
-);
-console.log("ok features all-on enables react/vitest/astro and isolates playwright");
 
-vitestOverride.files[0] = "**/mutated-tests/**";
-vitestOverride.excludeFiles[0] = "**/mutated-playwright/**";
-playwrightVitestOff.files[0] = "**/mutated-playwright/**";
-playwrightVitestOff.rules["vitest/expect-expect"] = "error";
-const independentConfig = createConfig(
-  {},
-  { react: true, remix: false, vitest: true, astro: true },
+assert.equal(playwrightOffs["vitest/expect-expect"], "off");
+
+assert.equal(playwrightOffs["vitest/no-focused-tests"], "off");
+
+const vitestOverride = allOn.overrides.find((o) => o.env?.vitest === true);
+
+assert.deepEqual(vitestOverride?.excludeFiles, ["**/playwright/**/*.spec.*"]);
+
+assert.equal(overrideRules(vitestOverride)["vitest/no-focused-tests"], "error");
+
+const playwrightSpecRules = overrideRules(
+  allOn.overrides.find((o) => o.files[0] === "**/playwright/**/*.spec.*"),
 );
-const independentVitestOverride = independentConfig.overrides.find((o) => o.env?.vitest);
-const independentPlaywrightVitestOff = independentConfig.overrides.find(
-  (o) =>
-    Array.isArray(o.files) &&
-    o.files.includes("**/playwright/**") &&
-    o.rules?.["vitest/expect-expect"],
+
+assert.equal(playwrightSpecRules["playwright/no-focused-test"], "error");
+
+assert.equal(playwrightSpecRules["playwright/missing-playwright-await"], "error");
+
+assert.ok(allOn.jsPlugins.some((plugin) => isRecord(plugin) && plugin.name === "playwright"));
+
+console.log("ok features all-on enables react/vitest/playwright/astro and isolates playwright");
+
+playwrightOffs["vitest/expect-expect"] = "error";
+
+assert.equal(
+  overrideRules(playwrightOverride(createConfig({}, allOnFeatures).overrides))[
+    "vitest/expect-expect"
+  ],
+  "off",
 );
-assert.equal(independentVitestOverride.files[0], "**/tests/**");
-assert.equal(independentVitestOverride.excludeFiles[0], "**/playwright/**/*.spec.*");
-assert.deepEqual(independentPlaywrightVitestOff.files, ["**/playwright/**"]);
-assert.equal(independentPlaywrightVitestOff.rules["vitest/expect-expect"], "off");
-console.log("ok createConfig results own playwright vitest override graphs");
+
+console.log("ok createConfig results own playwright override graphs");
 
 // Auto-detect matches package tree resolution from this module
 const detected = createConfig();
 const detectedJsx = canResolve("react") || canResolve("remix/component");
+
 assert.equal(detected.plugins.includes("react"), detectedJsx);
+
 assert.equal(detected.plugins.includes("jsx-a11y"), detectedJsx);
+
 assert.equal(detected.rules["react/rules-of-hooks"] === "error", canResolve("react"));
+
 assert.equal(detected.plugins.includes("vitest"), canResolve("vitest"));
+
 assert.equal(
-  detected.overrides.some(
-    (o) => Array.isArray(o.files) && o.files.includes("**/*.astro") && o.env?.astro === true,
-  ),
+  detected.jsPlugins.some((plugin) => isRecord(plugin) && plugin.name === "playwright"),
+  canResolve("@playwright/test"),
+);
+
+assert.equal(
+  detected.overrides.some((o) => o.files.includes("**/*.astro") && o.env?.astro === true),
   canResolve("astro"),
 );
+
 console.log("ok createConfig() auto-detect matches package tree");
 
 /**
+ * Diagnostics without a rule code (unused disable directives) are matched by message.
  * @typedef {{ code: string, severity: string }} ExpectedDiagnostic
  */
 
@@ -233,142 +325,212 @@ console.log("ok createConfig() auto-detect matches package tree");
  */
 function runJson(target, { configPath = config, cwd = root, expected = [], label } = {}) {
   const display = label ?? path.relative(path.join(root, "fixtures"), target);
+
   const result = spawnSync(oxlintBin, ["-c", configPath, "-f", "json", target], {
     encoding: "utf8",
     cwd,
   });
+
   const stderr = result.stderr?.trim() ?? "";
+
+  /**
+   * @param {string} reason
+   * @param {string} [detail]
+   */
   const fail = (reason, detail = "") => {
     console.error(`FAIL ${display} (${reason})`);
+
     if (result.error) console.error(result.error.message);
+
     if (stderr) console.error(stderr);
+
     if (detail) console.error(detail);
     process.exitCode = 1;
   };
 
   if (result.error || result.signal || stderr) {
     fail(result.signal ? `terminated by ${result.signal}` : "oxlint execution failed");
+
     return;
   }
 
-  /** @type {{ diagnostics?: Array<ExpectedDiagnostic> }} */
+  /** @type {unknown} */
   let payload;
+
   try {
     payload = JSON.parse(result.stdout);
   } catch {
     fail("invalid json output", result.stdout?.trim());
-    return;
-  }
-  if (!Array.isArray(payload.diagnostics)) {
-    fail("json output has no diagnostics array");
+
     return;
   }
 
-  const actual = payload.diagnostics.map(({ code, severity }) => `${severity} ${code}`).toSorted();
+  if (!isRecord(payload) || !Array.isArray(payload.diagnostics)) {
+    fail("json output has no diagnostics array");
+
+    return;
+  }
+
+  const actual = payload.diagnostics
+    .filter(isRecord)
+    .map(({ code, message, severity }) => [severity, isString(code) ? code : message].join(" "))
+    .toSorted();
+
   const wanted = expected.map(({ code, severity }) => `${severity} ${code}`).toSorted();
   const expectedStatus = wanted.length === 0 ? 0 : 1;
+
   if (result.status !== expectedStatus || actual.join("\n") !== wanted.join("\n")) {
     fail(
       `expected status ${expectedStatus} and [${wanted.join(", ")}], got ${result.status} and [${actual.join(", ")}]`,
     );
+
     return;
   }
 
   console.log(`ok ${display} (${wanted.length === 0 ? "clean" : wanted.join(", ")})`);
 }
 
+/** @param {string} file */
 const fixture = (file) => path.join(root, "fixtures", file);
+
+/** @param {string} code */
 const error = (code) => [{ code, severity: "error" }];
-const warning = (code) => [{ code, severity: "warning" }];
+
+/**
+ * Installs this package into `<dir>/node_modules` as a consumer would see it.
+ * @param {string} dir
+ */
+function installIsolatedPackage(dir) {
+  const isolatedPackage = path.join(dir, "node_modules", "@wkovacs64", "oxlint-config");
+
+  mkdirSync(isolatedPackage, { recursive: true });
+
+  for (const file of ["index.js", "index.d.ts", "package.json"]) {
+    copyFileSync(path.join(root, file), path.join(isolatedPackage, file));
+  }
+
+  cpSync(path.join(root, "plugins"), path.join(isolatedPackage, "plugins"), { recursive: true });
+
+  for (const dependency of ["oxlint", "@oxlint/plugins", "eslint-plugin-playwright"]) {
+    const target = path.join(dir, "node_modules", dependency);
+
+    mkdirSync(path.dirname(target), { recursive: true });
+    symlinkSync(path.join(root, "node_modules", dependency), target, "dir");
+  }
+}
+
+// Playwright's own rules apply to specs; Vitest's must not leak into them.
+const focusedNoAssertions = [
+  ...error("playwright(no-focused-test)"),
+  ...error("playwright(expect-expect)"),
+];
 
 runJson(fixture("hooks-good.tsx"));
-runJson(fixture("hooks-bad.tsx"), {
-  expected: [
-    { code: "react(hooks)", severity: "error" },
-    { code: "react-hooks(rules-of-hooks)", severity: "error" },
-  ],
-});
+
+runJson(fixture("hooks-bad.tsx"), { expected: error("react-hooks(rules-of-hooks)") });
+
 runJson(fixture("compiler-bad.tsx"), { expected: error("react(refs)") });
+
 runJson(fixture("unused-args-ok.ts"));
+
 runJson(fixture("test-import-bad.ts"), { expected: error("eslint(no-restricted-imports)") });
+
 runJson(fixture("playwright/hooks-ok.ts"));
-runJson(fixture("playwright/focused.spec.ts"));
+
+runJson(fixture("playwright/focused.spec.ts"), { expected: focusedNoAssertions });
+
 runJson(fixture("playwright/test-base.ts"));
-runJson(fixture("playwright/direct.spec.ts"));
-runJson(fixture("playwright/custom-fixture.spec.ts"));
-runJson(fixture("playwright/leak-probe.spec.ts"));
-runJson(fixture("vitest-focused-bad.test.ts"), {
-  expected: warning("vitest(no-focused-tests)"),
+
+runJson(fixture("playwright/direct.spec.ts"), { expected: focusedNoAssertions });
+
+runJson(fixture("playwright/custom-fixture.spec.ts"), { expected: focusedNoAssertions });
+
+runJson(fixture("playwright/leak-probe.spec.ts"), {
+  expected: [...focusedNoAssertions, ...error("playwright(expect-expect)")],
 });
+
+runJson(fixture("vitest-focused-bad.test.ts"), {
+  expected: error("vitest(no-focused-tests)"),
+});
+
 runJson(fixture("vitest-no-expect-bad.test.ts"), {
   expected: error("vitest(expect-expect)"),
 });
+
 runJson(fixture("vitest-untyped-mock-bad.test.ts"), {
   expected: error("vitest(require-mock-type-parameters)"),
 });
+
 runJson(fixture("role-img-ok.tsx"));
+
 runJson(fixture("role-required-bad.tsx"), {
   expected: error("jsx-a11y(role-has-required-aria-props)"),
 });
+
 runJson(fixture("side-effect-import-ok.ts"));
+
 runJson(fixture("unbound-method-ok.test.ts"));
+
 runJson(fixture("floating-promise-bad.ts"), {
   expected: error("typescript(no-floating-promises)"),
 });
+
+runJson(fixture("disable-reason-bad.ts"), {
+  expected: error("conventions(require-disable-reason)"),
+});
+
+runJson(fixture("disable-reason-ok.ts"));
+
+runJson(fixture("unused-disable-bad.ts"), {
+  expected: error("Unused oxlint-disable directive (no problems were reported)."),
+});
+
+runJson(fixture("type-name-casing-bad.ts"), {
+  expected: [...error("conventions(type-name-casing)"), ...error("conventions(type-name-casing)")],
+});
+
+runJson(fixture("type-assertion-bad.ts"), {
+  expected: error("anti-slop(require-safety-comment-for-type-assertion)"),
+});
+
+runJson(fixture("type-assertion-ok.ts"));
+
 runJson(fixture("void-expression-bad.ts"), {
   expected: error("typescript(no-confusing-void-expression)"),
 });
 
 const remixConfig = path.join(root, "fixtures/config-remix.ts");
+
 runJson(fixture("remix/component-ok.tsx"), { configPath: remixConfig });
+
 runJson(fixture("remix/jsx-key-bad.tsx"), {
   configPath: remixConfig,
   expected: error("react(jsx-key)"),
 });
+
 runJson(fixture("remix/alt-text-bad.tsx"), {
   configPath: remixConfig,
   expected: error("jsx-a11y(alt-text)"),
 });
 
 const astroConfig = path.join(root, "fixtures/config-astro.ts");
+
 runJson(fixture("astro-global-ok.astro"), { configPath: astroConfig });
+
 runJson(fixture("astro-global-bad.astro"), {
   configPath: astroConfig,
   expected: error("eslint(no-undef)"),
 });
 
 const isolatedRoot = mkdtempSync(path.join(tmpdir(), "oxlint-config-no-vitest-"));
-try {
-  const isolatedPackage = path.join(isolatedRoot, "node_modules", "@wkovacs64", "oxlint-config");
-  mkdirSync(path.join(isolatedPackage, "plugins"), { recursive: true });
-  copyFileSync(path.join(root, "index.js"), path.join(isolatedPackage, "index.js"));
-  copyFileSync(
-    path.join(root, "plugins/typography.js"),
-    path.join(isolatedPackage, "plugins/typography.js"),
-  );
-  writeFileSync(
-    path.join(isolatedPackage, "package.json"),
-    JSON.stringify({ name: "@wkovacs64/oxlint-config", type: "module", exports: "./index.js" }),
-  );
-  symlinkSync(
-    path.join(root, "node_modules", "oxlint"),
-    path.join(isolatedRoot, "node_modules", "oxlint"),
-    "dir",
-  );
 
-  const isolatedIndex = path.join(isolatedPackage, "index.js");
-  const { createConfig: createIsolatedConfig } = await import(pathToFileURL(isolatedIndex));
-  const isolatedConfig = createIsolatedConfig();
-  assert.ok(!isolatedConfig.plugins.includes("react"));
-  assert.ok(!isolatedConfig.plugins.includes("jsx-a11y"));
-  assert.ok(!isolatedConfig.plugins.includes("vitest"));
-  assert.ok(!isolatedConfig.overrides.some((o) => o.env?.vitest));
-  assert.ok(!isolatedConfig.overrides.some((o) => o.files?.includes?.("**/playwright/**")));
+try {
+  installIsolatedPackage(isolatedRoot);
 
   const isolatedConfigPath = path.join(isolatedRoot, "oxlint.config.mjs");
   writeFileSync(
     isolatedConfigPath,
-    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig();\n',
+    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig({ options: { typeAware: false } });\n',
   );
   const isolatedProbe = path.join(isolatedRoot, "playwright", "leak-probe.spec.ts");
   mkdirSync(path.dirname(isolatedProbe));
@@ -377,7 +539,7 @@ try {
     configPath: isolatedConfigPath,
     label: "isolated consumer without Vitest",
   });
-  console.log("ok isolated auto-detection omits Vitest layer");
+  console.log("ok isolated auto-detection omits Vitest and Playwright layers");
 
   const isolatedJsxProbe = path.join(isolatedRoot, "role-required-bad.tsx");
   copyFileSync(fixture("role-required-bad.tsx"), isolatedJsxProbe);
@@ -387,7 +549,7 @@ try {
   });
   writeFileSync(
     isolatedConfigPath,
-    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig({}, { remix: true });\n',
+    'import { createConfig } from "@wkovacs64/oxlint-config";\nexport default createConfig({ options: { typeAware: false } }, { remix: true });\n',
   );
   runJson(isolatedJsxProbe, {
     configPath: isolatedConfigPath,
@@ -405,32 +567,19 @@ try {
 }
 
 const boundariesRoot = mkdtempSync(path.join(tmpdir(), "oxlint-config-module-boundaries-"));
+
 try {
-  const isolatedPackage = path.join(boundariesRoot, "node_modules", "@wkovacs64", "oxlint-config");
-  mkdirSync(path.join(isolatedPackage, "plugins"), { recursive: true });
-  copyFileSync(path.join(root, "index.js"), path.join(isolatedPackage, "index.js"));
-  copyFileSync(
-    path.join(root, "plugins/module-boundaries.js"),
-    path.join(isolatedPackage, "plugins/module-boundaries.js"),
-  );
-  copyFileSync(
-    path.join(root, "plugins/typography.js"),
-    path.join(isolatedPackage, "plugins/typography.js"),
-  );
-  copyFileSync(path.join(root, "package.json"), path.join(isolatedPackage, "package.json"));
-  symlinkSync(
-    path.join(root, "node_modules", "oxlint"),
-    path.join(boundariesRoot, "node_modules", "oxlint"),
-    "dir",
-  );
+  installIsolatedPackage(boundariesRoot);
 
   const modulesRoot = path.join(boundariesRoot, "app/modules");
+
   for (const moduleName of ["alpha", "beta", "special[one]"]) {
     mkdirSync(path.join(modulesRoot, moduleName, "nested"), { recursive: true });
     writeFileSync(path.join(modulesRoot, moduleName, `${moduleName}.ts`), "export {};\n");
     writeFileSync(path.join(modulesRoot, moduleName, `${moduleName}.server.ts`), "export {};\n");
     writeFileSync(path.join(modulesRoot, moduleName, "internal.ts"), "export {};\n");
   }
+
   const boundariesConfig = path.join(boundariesRoot, "oxlint.config.mjs");
   writeFileSync(
     boundariesConfig,
@@ -444,12 +593,23 @@ try {
     ].join("\n"),
   );
 
+  /**
+   * @param {string} relative
+   * @param {string} source
+   */
   const boundaryFile = (relative, source) => {
     const filename = path.join(boundariesRoot, relative);
     mkdirSync(path.dirname(filename), { recursive: true });
     writeFileSync(filename, `${source}\n`);
+
     return filename;
   };
+
+  /**
+   * @param {string} relative
+   * @param {string} source
+   * @param {ExpectedDiagnostic[]} [expected]
+   */
   const boundaryRun = (relative, source, expected = []) =>
     runJson(boundaryFile(relative, source), {
       configPath: boundariesConfig,
@@ -457,8 +617,10 @@ try {
       expected,
       label: `module boundaries: ${relative}`,
     });
+
   const nativeBoundaryError = error("eslint(no-restricted-imports)");
   const relativeBoundaryError = error("module-boundaries(no-relative-module-imports)");
+  const parentImportError = error("module-boundaries(no-parent-imports)");
 
   boundaryRun("app/routes/public-client.ts", 'import "#/app/modules/alpha/alpha";');
   boundaryRun(
@@ -553,11 +715,20 @@ try {
     'export * from "../beta/internal";',
     relativeBoundaryError,
   );
+  boundaryRun("app/routes/relative-public.ts", 'import "../modules/alpha/alpha";', [
+    ...relativeBoundaryError,
+    ...parentImportError,
+  ]);
+
+  boundaryRun("app/routes/admin/parent.ts", 'import "../utils/db";', parentImportError);
   boundaryRun(
-    "app/routes/relative-public.ts",
-    'import "../modules/alpha/alpha";',
-    relativeBoundaryError,
+    "app/routes/admin/parent-reexport.ts",
+    'export * from "../utils/db";',
+    parentImportError,
   );
+  boundaryRun("app/routes/admin/sibling.ts", 'import "./helpers";');
+  boundaryRun("app/routes/admin/alias.ts", 'import "#/app/utils/db";');
+  boundaryRun("app/routes/admin/dynamic.ts", 'await import("../utils/db");');
   boundaryRun(
     "app/routes/deep-alias.astro",
     '---\nimport "#/app/modules/alpha/internal";\n---',
@@ -566,7 +737,7 @@ try {
   boundaryRun(
     "app/routes/relative-deep.astro",
     '<script>\nimport "../modules/alpha/internal";\n</script>',
-    relativeBoundaryError,
+    [...relativeBoundaryError, ...parentImportError],
   );
   boundaryRun("app/routes/test-import.astro", '---\nimport "./route.test";\n---');
 
@@ -601,6 +772,7 @@ try {
 
   const originalCwd = process.cwd();
   process.chdir(boundariesRoot);
+
   try {
     assert.throws(
       () =>
@@ -631,13 +803,15 @@ try {
   } finally {
     process.chdir(originalCwd);
   }
+
   console.log("ok module boundaries reject missing directories and invalid aliases");
 } finally {
   rmSync(boundariesRoot, { recursive: true, force: true });
 }
 
-if (process.exitCode) {
+if (process.exitCode === 1) {
   console.error("smoke failed");
   process.exit(process.exitCode);
 }
+
 console.log("smoke passed");

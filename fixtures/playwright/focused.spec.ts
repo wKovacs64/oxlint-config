@@ -1,3 +1,5 @@
-declare const test: { only(name: string, callback: () => void): void };
+declare const test: { only: (name: string, callback: () => void) => void };
 
-test.only("playwright test", () => {});
+test.only("playwright test", () => {
+  console.log("focused");
+});

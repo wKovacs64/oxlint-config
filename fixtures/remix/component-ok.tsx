@@ -2,6 +2,7 @@ import { css, on, unsafeHTML, type Handle } from "remix/component";
 
 export function Counter(handle: Handle) {
   let count = 0;
+
   return () => (
     <div class="counter" mix={css({ display: "flex" })}>
       <button

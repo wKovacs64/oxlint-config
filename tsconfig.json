@@ -2,17 +2,19 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     "module": "preserve",
-    "target": "ES2022",
+    "target": "ES2024",
     "strict": true,
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
     "verbatimModuleSyntax": true
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.d.ts", "**/*.mjs"],
-  "exclude": ["fixtures", "node_modules"]
+  "exclude": ["fixtures", "node_modules", "plugins/anti-slop"]
 }

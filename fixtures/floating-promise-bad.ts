@@ -1,3 +1,3 @@
 export function fire() {
-  Promise.resolve(1).then(() => {});
+  Promise.resolve(1).then((value) => value + 1);
 }

@@ -5,4 +5,6 @@ test.only("focused via custom fixture", () => {
   expect(true).toBe(true);
 });
 
-test("empty body via custom fixture", () => {});
+test("no assertions via custom fixture", () => {
+  console.log("no assertions");
+});

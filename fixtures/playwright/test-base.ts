@@ -1,23 +1,14 @@
 /** Local stand-in for a Playwright custom-fixture re-export. */
-export const test = Object.assign(
-  (name: string, fn: () => unknown) => {
-    void name;
-    void fn;
-  },
-  {
-    only(name: string, fn: () => unknown) {
-      void name;
-      void fn;
-    },
-  },
-);
+type TestBody = () => void;
 
-export const expect = (value: unknown) => {
-  void value;
-  return {
-    toBeVisible() {},
-    toBe(expected: unknown) {
-      void expected;
-    },
-  };
-};
+function run(name: string, body: TestBody) {
+  console.log(name);
+  body();
+}
+
+export const test = Object.assign(run, { only: run });
+
+export const expect = (value: boolean) => ({
+  toBeVisible: () => value,
+  toBe: (expected: boolean) => value === expected,
+});

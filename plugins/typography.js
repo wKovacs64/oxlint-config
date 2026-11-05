@@ -1,11 +1,16 @@
-const typographicQuotes = /[\u2018\u2019\u201c\u201d]/u;
+import { definePlugin, defineRule } from "@oxlint/plugins";
+import { isString } from "./guards.js";
 
-export default {
+/** @import { ESTree } from "@oxlint/plugins" */
+
+const typographicQuotes = /[‘’“”]/u;
+
+export default definePlugin({
   meta: {
     name: "typography",
   },
   rules: {
-    "no-typographic-quotes": {
+    "no-typographic-quotes": defineRule({
       meta: {
         type: "suggestion",
         docs: {
@@ -18,8 +23,12 @@ export default {
         },
       },
       create(context) {
+        /**
+         * @param {ESTree.Node} node
+         * @param {unknown} value
+         */
         function check(node, value) {
-          if (typeof value === "string" && typographicQuotes.test(value)) {
+          if (isString(value) && typographicQuotes.test(value)) {
             context.report({ node, messageId: "useStraightQuotes" });
           }
         }
@@ -30,6 +39,6 @@ export default {
           TemplateElement: (node) => check(node, node.value.raw),
         };
       },
-    },
+    }),
   },
-};
+});

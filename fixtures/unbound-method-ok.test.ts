@@ -1,4 +1,8 @@
-declare const expect: (value: unknown) => { toHaveBeenCalled(): void };
-declare const subject: { method(): void };
+declare class Service {
+  save(): void;
+}
 
-expect(subject.method).toHaveBeenCalled();
+declare const service: Service;
+declare const expect: (value: () => void) => { toHaveBeenCalled: () => void };
+
+expect(service.save).toHaveBeenCalled();

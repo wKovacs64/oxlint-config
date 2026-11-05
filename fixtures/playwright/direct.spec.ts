@@ -5,4 +5,6 @@ test.only("focused playwright", async ({ page }) => {
   await expect(page.getByText("ok")).toBeVisible();
 });
 
-test("empty body stays valid playwright", async () => {});
+test("no assertions", async ({ page }) => {
+  await page.goto("/");
+});

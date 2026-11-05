@@ -5,5 +5,6 @@ export function maybeHook(cond: boolean) {
   if (cond) {
     return useState(0);
   }
+
   return null;
 }

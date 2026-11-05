@@ -2,9 +2,10 @@
 
 Personal [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) config.
 
-**Type-aware** linting via `oxlint-tsgolint`, Oxlint defaults, high-signal rule tweaks, and
-**optional** React / Remix / Vitest / Astro layers auto-detected from the package tree
-(overridable).
+**Type-aware** linting via `oxlint-tsgolint`, strict bug-catching and consistency rules,
+[anti-slop](#anti-slop), and **optional** React / Remix / Vitest / Playwright / Astro layers
+auto-detected from the package tree (overridable). Every enabled rule is an error: warnings don't
+fail CI, so they get ignored.
 
 [![npm Version](https://img.shields.io/npm/v/@wkovacs64/oxlint-config.svg?style=for-the-badge)](https://www.npmjs.com/package/@wkovacs64/oxlint-config)
 [![Build Status](https://img.shields.io/badge/CI-GitHub%20Actions-success?logo=github&style=for-the-badge)](https://github.com/wKovacs64/oxlint-config/actions?query=workflow%3Aci)
@@ -45,12 +46,13 @@ Add scripts:
 On load, the config resolves these packages from the consumer install (same idea as the ESLint
 config) and enables matching layers:
 
-| Package  | Enables                                                                                                                   |
-| -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `react`  | `react` + `jsx-a11y` plugins/rules; all `react/*` off under `**/playwright/**`                                            |
-| `remix`  | JSX + `jsx-a11y` rules without React-only rules (via `remix/component`)                                                   |
-| `vitest` | plugin + `env.vitest` / strict rules on test globs (`no-focused-tests` warn); all `vitest/*` off under `**/playwright/**` |
-| `astro`  | `env.astro` + `no-undef` on `**/*.astro` (frontmatter + `<script>` only)                                                  |
+| Package            | Enables                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------- |
+| `react`            | `react` + `jsx-a11y` plugins/rules; all `react/*` off under `**/playwright/**`                  |
+| `remix`            | JSX + `jsx-a11y` rules without React-only rules (via `remix/component`)                         |
+| `vitest`           | plugin + `env.vitest` / strict rules on test globs; all `vitest/*` off under `**/playwright/**` |
+| `@playwright/test` | `eslint-plugin-playwright`'s recommended rules, as errors, on `**/playwright/**/*.spec.*`       |
+| `astro`            | `env.astro` + `no-undef` on `**/*.astro` (frontmatter + `<script>` only)                        |
 
 Force on/off without relying on resolution (monorepos, tests):
 
@@ -63,6 +65,7 @@ export default createConfig(
     react: false,
     remix: true,
     vitest: true,
+    playwright: true,
     astro: true,
   },
 );
@@ -102,6 +105,18 @@ modules must use those aliased public entrypoints. A module may use relative or 
 its own internals, including nested parent-relative imports. Relative imports and re-exports into a
 module are rejected from outside that module. Aliased module paths containing `.` or `..` segments
 are always rejected.
+
+Outside the modules directory, static imports and re-exports may not climb with `../`
+(`module-boundaries/no-parent-imports`); use a `#/` alias. `./` imports and dynamic `import()` are
+allowed, since `#/` aliases do not resolve in dynamic imports.
+
+```ts
+// app/routes/admin/users.tsx
+import { helper } from "./helper"; // ok
+import { db } from "#/app/utils/db"; // ok
+import { db } from "../../utils/db"; // error
+const lazy = await import("../../utils/db"); // ok
+```
 
 The configured directory must exist. The `#/` alias is resolved from the process working directory,
 so run Oxlint from the project root. Alias restrictions use Oxlint's native `no-restricted-imports`;
@@ -167,18 +182,80 @@ export default createConfig({
 Consumer ignore patterns, plugins, and overrides are appended to the shared configuration. Object
 settings and rules are merged with consumer values taking precedence.
 
+### What it checks
+
+- Oxlint's `correctness` and `suspicious` categories, as errors
+- Bug catchers from other categories, including type-aware `no-misused-promises`,
+  `switch-exhaustiveness-check`, `no-deprecated`, `only-throw-error`,
+  `prefer-promise-reject-errors`, `return-await`, `prefer-nullish-coalescing`,
+  `strict-boolean-expressions`, and `restrict-plus-operands`
+- `no-explicit-any` plus the `no-unsafe-*` rules, which stop the `any` from `JSON.parse`,
+  `Response.json()`, and untyped packages from spreading. `no-unsafe-assignment` and
+  `unbound-method` are off in test files, where asymmetric matchers (`expect.any(String)`) are `any`
+  and `expect(service.save)` references methods
+- typescript-eslint's `stylistic` preset rules and `unified-signatures`, without
+  `consistent-type-definitions`
+- `eqeqeq`, `import/no-duplicates`, `consistent-type-assertions`, `method-signature-style: property`
+- [anti-slop](#anti-slop) and the [custom rules](#custom-rules)
+- Source files may not import test files
+
+`as` and `!` are allowed; an `as` needs a `SAFETY:` comment. `@ts-ignore` and `@ts-nocheck` are
+banned; `@ts-expect-error` needs a description.
+
+Strings may be tested for truthiness and defaulted with `||`: `if (!str)` and `str || "default"`
+treat `""` as missing. Numbers may not: `{count && <Badge />}` renders `0`. Enable
+`noUncheckedIndexedAccess` in `tsconfig.json`, or `strict-boolean-expressions` reports
+`if (!items[i])` as always truthy.
+
+### Disable directives
+
+Disable one rule, and say why after `--`:
+
+```ts
+// oxlint-disable-next-line typescript/no-deprecated -- no replacement until the v3 SDK
+```
+
+`conventions/require-disable-reason` reports a directive without a reason,
+`unicorn/no-abusive-eslint-disable` one without a rule name, and `reportUnusedDisableDirectives` one
+that suppresses nothing.
+
+### Custom rules
+
+| Rule                                 | Reports                                                                                            |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `typography/no-typographic-quotes`   | U+2018, U+2019, U+201C, and U+201D in strings, JSX text, and template text (not comments)          |
+| `conventions/require-disable-reason` | `eslint-disable` and `oxlint-disable` directives without a `-- reason`                             |
+| `conventions/type-name-casing`       | Type, interface, class, enum, and type parameter names that aren't PascalCase or use an `I` prefix |
+| `module-boundaries/*`                | [Module boundaries](#module-boundaries), when enabled                                              |
+
+### anti-slop
+
+Every generic rule from [`dmmulroy/anti-slop`](https://github.com/dmmulroy/anti-slop), plus
+`oxc/no-accumulating-spread`. They reject unexplained type assertions, ad hoc `typeof` narrowing,
+`unknown` and dictionary types past the I/O boundary, object parameters, module mocking, and dense
+code without blank lines between statements.
+
+- Parse external input at its boundary and pass the parsed type on. `typeof` is allowed in
+  TypeScript type guards (functions returning `value is T`).
+- A type assertion needs a `SAFETY:` comment stating the invariant that makes it true.
+- Tests replace dependencies through real interfaces instead of `vi.mock`.
+
+`anti-slop/require-readable-spacing` is autofixable with `oxlint --fix`. The rules are vendored as
+JavaScript in `plugins/anti-slop` by `scripts/vendor-anti-slop.mjs` (Effect rules excluded). To
+update, run it with an upstream commit SHA:
+
+```sh
+node scripts/vendor-anti-slop.mjs <sha>
+```
+
 ### Notes
 
-- Prefer Oxlint native plugins/defaults over exhaustive rule dumps.
 - `createConfig` combines consumer plugins with the shared plugin set.
-- `no-unused-vars` explicitly allows unused arguments prefixed with `_`, including bare `_`. Other
-  options remain at their defaults.
-- `typography/no-typographic-quotes` rejects U+2018, U+2019, U+201C, and U+201D in string literals,
-  JSX text, and raw template text. Comments are excluded. Inspired by
-  [`@slhs/eslint-config`](https://www.npmjs.com/package/@slhs/eslint-config), implemented with
-  [Oxlint's JS plugin API](https://oxc.rs/docs/guide/usage/linter/js-plugins.html).
+- `no-unused-vars` allows unused arguments prefixed with `_`, including bare `_`, and rest siblings.
+- `typescript/no-floating-promises` allows `node:test`'s `test`/`it`/`describe`/`suite` and Remix's
+  `handle.update()` unawaited.
+- `typescript/only-throw-error` allows throwing `Response` and React Router's `data()`.
 - Import **ordering** is not configured (no native `import/order`); use a formatter if you care.
 - **Astro:** Oxlint lints frontmatter + `<script>` only — no template/`client:*` rules (see
   [compatibility](https://oxc.rs/compatibility.html)).
-- Not included (no solid native path, or out of scope for v1): Testing Library, jest-dom, Playwright
-  recommended sets, TS naming-convention (e.g. ban `I`-prefix interfaces).
+- Not included: Testing Library and jest-dom.

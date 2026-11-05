@@ -191,8 +191,9 @@ settings and rules are merged with consumer values taking precedence.
   `strict-boolean-expressions`, and `restrict-plus-operands`
 - `no-explicit-any` plus the `no-unsafe-*` rules, which stop the `any` from `JSON.parse`,
   `Response.json()`, and untyped packages from spreading. `no-unsafe-assignment` and
-  `unbound-method` are off in test files, where asymmetric matchers (`expect.any(String)`) are `any`
-  and `expect(service.save)` references methods
+  `unbound-method` are off in `**/tests/**`, `**/#tests/**`, `**/__tests__/**`, and `**/*.test.*`
+  (not Playwright specs), where asymmetric matchers (`expect.any(String)`) are `any` and
+  `expect(service.save)` references methods
 - typescript-eslint's `stylistic` preset rules and `unified-signatures`, without
   `consistent-type-definitions`
 - `eqeqeq`, `import/no-duplicates`, `consistent-type-assertions`, `method-signature-style: property`

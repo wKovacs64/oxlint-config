@@ -74,15 +74,18 @@ function ruleOffs(plugin) {
       readFileSync(join(dirname(oxlintPkg), "configuration_schema.json"), "utf8"),
     );
 
-    const rules =
-      isRecord(schema) &&
-      isRecord(schema.definitions) &&
-      isRecord(schema.definitions.DummyRuleMap) &&
-      isRecord(schema.definitions.DummyRuleMap.properties)
-        ? schema.definitions.DummyRuleMap.properties
-        : {};
+    if (
+      !isRecord(schema) ||
+      !isRecord(schema.definitions) ||
+      !isRecord(schema.definitions.DummyRuleMap) ||
+      !isRecord(schema.definitions.DummyRuleMap.properties)
+    ) {
+      throw new Error(
+        "oxlint configuration_schema.json has no definitions.DummyRuleMap.properties",
+      );
+    }
 
-    cachedRuleKeys = Object.keys(rules);
+    cachedRuleKeys = Object.keys(schema.definitions.DummyRuleMap.properties);
   }
 
   const keys = cachedRuleKeys.filter((key) => key.startsWith(`${plugin}/`));

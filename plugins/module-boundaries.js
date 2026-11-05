@@ -47,17 +47,19 @@ const noRelativeModuleImports = defineRule({
     },
   },
   create(context) {
-    // The schema guarantees this shape; the guards narrow Oxlint's JSON option type.
     const [options] = context.options;
 
-    const modulesRoot =
-      isRecord(options) && isString(options.modulesRoot) ? options.modulesRoot : "";
+    if (
+      !isRecord(options) ||
+      !isString(options.modulesRoot) ||
+      !Array.isArray(options.moduleNames) ||
+      !options.moduleNames.every(isString)
+    ) {
+      throw new Error("no-relative-module-imports requires { modulesRoot, moduleNames } options");
+    }
 
-    const knownModules = new Set(
-      isRecord(options) && Array.isArray(options.moduleNames)
-        ? options.moduleNames.filter(isString)
-        : [],
-    );
+    const { modulesRoot } = options;
+    const knownModules = new Set(options.moduleNames);
 
     const importerModule = containingModule(context.filename, modulesRoot, knownModules);
 

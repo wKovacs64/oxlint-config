@@ -3,7 +3,7 @@ import { isString } from "./guards.js";
 
 /** @import { ESTree } from "@oxlint/plugins" */
 
-const typographicQuotes = /[‘’“”]/u;
+const typographicQuotes = /[\u2018\u2019\u201c\u201d]/u;
 
 export default definePlugin({
   meta: {

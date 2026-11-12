@@ -63,7 +63,7 @@
     "@types/react": "19.3.0",
     "@wkovacs64/oxfmt-config": "1.0.0",
     "oxfmt": "0.78.0",
-    "oxlint": "1.92.0",
+    "oxlint": "1.93.0",
     "oxlint-tsgolint": "7.0.2006",
     "react": "19.3.1",
     "remix": "3.2.0",

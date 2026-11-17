@@ -22,6 +22,10 @@
       "matchPackageNames": ["typescript"],
       "matchUpdateTypes": ["minor"],
       "automerge": false
+    },
+    {
+      "matchPackageNames": ["oxlint", "oxlint-tsgolint"],
+      "groupName": "oxlint"
     }
   ]
 }

@@ -68,7 +68,7 @@
     "react": "19.3.1",
     "remix": "3.2.0",
     "typescript": "7.0.2",
-    "vitest": "5.1.0"
+    "vitest": "5.1.1"
   },
   "peerDependencies": {
     "oxlint": ">=1.79.0 <2",

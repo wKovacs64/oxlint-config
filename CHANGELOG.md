@@ -1,5 +1,11 @@
 # @wkovacs64/oxlint-config
 
+## 0.5.1
+
+### Patch Changes
+
+- [#35](https://github.com/wKovacs64/oxlint-config/pull/35) [`abb7955`](https://github.com/wKovacs64/oxlint-config/commit/abb795590397a32382ad79b734d6bfdb06fa166a) Thanks [@wKovacs64](https://github.com/wKovacs64)! - Allow extra effect deps by turning off `react/exhaustive-effect-dependencies`. `react/exhaustive-deps` reports missing deps, including in `useInsertionEffect`. If you set its `additionalHooks`, include `useInsertionEffect` in your regex.
+
 ## 0.5.0
 
 ### Minor Changes

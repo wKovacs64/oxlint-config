@@ -64,7 +64,7 @@
     "@wkovacs64/oxfmt-config": "1.0.0",
     "oxfmt": "0.79.0",
     "oxlint": "1.94.0",
-    "oxlint-tsgolint": "7.0.2007",
+    "oxlint-tsgolint": "7.0.2008",
     "react": "19.3.1",
     "remix": "3.3.0",
     "typescript": "7.0.2",

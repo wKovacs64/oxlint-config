@@ -291,14 +291,13 @@ const antiSlopRules = {
 };
 
 /**
- * `correctness` enables exhaustive-deps and the React Compiler's recommended rules.
+ * `correctness` enables the React Compiler's recommended rules.
  * @satisfies {DummyRuleMap}
  */
 const reactRules = {
   "react/rules-of-hooks": "error",
   // React Compiler rules outside its recommended preset
   "react/capitalized-calls": "error",
-  "react/exhaustive-effect-dependencies": "error",
   "react/invariant": "error",
   "react/memo-dependencies": "error",
   "react/no-deriving-state-in-effects": "error",
@@ -306,6 +305,11 @@ const reactRules = {
   "react/syntax": "error",
   "react/todo": "error",
   "react/unsupported-syntax": "error",
+  // Rejects extra effect deps, which are valid re-run triggers. Needs an explicit "off" because
+  // `suspicious` enables it.
+  "react/exhaustive-effect-dependencies": "off",
+  // Checks `useInsertionEffect` only when listed as an additional hook.
+  "react/exhaustive-deps": ["error", { additionalHooks: "^useInsertionEffect$" }],
   // Same check as `react/rules-of-hooks`, so each violation would report twice
   // (https://oxc.rs/docs/guide/usage/linter/rules/react/hooks).
   "react/hooks": "off",

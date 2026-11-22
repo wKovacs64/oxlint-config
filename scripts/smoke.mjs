@@ -221,7 +221,6 @@ assert.deepEqual(createConfig({}, { ...allOnFeatures, remix: true }), allOn);
 
 const reactCompilerRuleNames = [
   "capitalized-calls",
-  "exhaustive-effect-dependencies",
   "invariant",
   "memo-dependencies",
   "no-deriving-state-in-effects",
@@ -232,6 +231,13 @@ const reactCompilerRuleNames = [
 ];
 
 assert.ok(reactCompilerRuleNames.every((name) => allOn.rules[`react/${name}`] === "error"));
+
+assert.equal(allOn.rules["react/exhaustive-effect-dependencies"], "off");
+
+assert.deepEqual(allOn.rules["react/exhaustive-deps"], [
+  "error",
+  { additionalHooks: "^useInsertionEffect$" },
+]);
 
 assert.ok(allOn.overrides.some((o) => o.env?.vitest === true));
 

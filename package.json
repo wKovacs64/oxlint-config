@@ -59,7 +59,7 @@
     "@changesets/changelog-github": "1.0.1",
     "@changesets/cli": "3.0.3",
     "@playwright/test": "1.65.1",
-    "@types/node": "26.6.7",
+    "@types/node": "26.6.10",
     "@types/react": "19.3.0",
     "@wkovacs64/oxfmt-config": "1.0.0",
     "oxfmt": "0.80.0",
